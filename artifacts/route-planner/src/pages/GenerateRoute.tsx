@@ -1,14 +1,15 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapComponent } from "@/components/map/MapComponent";
 import { ScoreRadar } from "@/components/charts/ScoreRadar";
 import { RouteChat } from "@/components/chat/RouteChat";
 import { useGenerateRoutes } from "@workspace/api-client-react";
-import type { RouteRequest, RouteResponse, GeneratedRoute } from "@workspace/api-client-react";
+import type { RouteRequest } from "@workspace/api-client-react";
 import { Mountain, Flame, Heart, Zap, Clock, Dumbbell, Navigation, Loader2, Info, Map, Play, Watch } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useRouteStore } from "@/context/RouteContext";
 
 const GOALS = [
   { id: "endurance", label: "Endurance", icon: Clock },
@@ -23,20 +24,7 @@ export default function GenerateRoute() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const generateMutation = useGenerateRoutes();
-  const [selectedRouteForTracking, setSelectedRouteForTracking] = useState<GeneratedRoute | null>(null);
-  
-  const [form, setForm] = useState<Partial<RouteRequest>>({
-    trainingGoal: "general_fitness" as any,
-    distanceMiles: 3.1, // 5k
-    startLat: 37.7749,  // Default SF
-    startLng: -122.4194,
-    timeOfDay: "morning" as any,
-    preferShade: true,
-    avoidTraffic: true,
-  });
-
-  const [result, setResult] = useState<RouteResponse | null>(null);
-  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const { form, setForm, result, setResult, selectedRouteId, setSelectedRouteId, clearRoutes } = useRouteStore();
 
   const handleApplyParams = useCallback((params: Record<string, any>) => {
     const validGoals = ["mountain_hiking", "heat_tolerance", "recovery", "speed_workout", "endurance", "general_fitness"];
@@ -69,7 +57,7 @@ export default function GenerateRoute() {
       return updated;
     });
     toast({ title: "Settings applied!", description: "Route parameters updated from AI recommendations." });
-  }, [toast]);
+  }, [toast, setForm]);
 
   const handleGenerate = () => {
     if (!form.trainingGoal || !form.distanceMiles || !form.startLat || !form.startLng) {
@@ -94,9 +82,13 @@ export default function GenerateRoute() {
     );
   };
 
+  const handleStartRun = (routeId: string) => {
+    clearRoutes();
+    setLocation(`/track/${routeId}`);
+  };
+
   return (
     <div className="flex flex-col lg:flex-row gap-8 pb-20 lg:h-[calc(100vh-6rem)]">
-      {/* LEFT COLUMN: FORM & MAP */}
       <div className="w-full lg:w-1/2 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
         <div className="bg-card border border-border rounded-2xl p-6 shadow-xl">
           <h2 className="text-2xl font-display mb-6 border-b border-border pb-4">1. Training Objective</h2>
@@ -197,7 +189,6 @@ export default function GenerateRoute() {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: RESULTS */}
       <div className="w-full lg:w-1/2 overflow-y-auto custom-scrollbar pr-2 flex flex-col gap-6">
         <AnimatePresence mode="wait">
           {!result && !generateMutation.isPending && (
@@ -229,7 +220,6 @@ export default function GenerateRoute() {
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
               className="flex flex-col gap-6"
             >
-              {/* Weather Summary Card */}
               <div className="bg-gradient-to-br from-secondary/20 to-card border border-secondary/30 rounded-2xl p-6 flex items-center gap-6">
                 <div className="bg-secondary/20 p-4 rounded-full text-secondary">
                   <Info className="w-8 h-8" />
@@ -314,8 +304,7 @@ export default function GenerateRoute() {
                               style={{ backgroundColor: color }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedRouteForTracking(route);
-                                setLocation(`/track/${route.id}`);
+                                handleStartRun(route.id);
                               }}
                             >
                               <Play className="w-4 h-4 fill-current" /> Start Run
