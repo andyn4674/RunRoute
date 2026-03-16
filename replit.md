@@ -90,9 +90,12 @@ Located in `artifacts/api-server/src/routes/route-engine.ts`. Uses:
 - Generates via-points in a loop pattern, sends to OSRM for road-snapped geometry, decodes polyline response
 - Falls back to raw via-points if OSRM is unavailable (10s timeout)
 - Live weather via Open-Meteo API (api.open-meteo.com) — no API key needed
-- AI-generated local advisories (events, road closures, police activity, construction) via OpenAI, cached 30min per area
-- Advisory output validated with strict schema checks; malformed data falls back to empty array
-- Routes flagged `notRecommended` for extreme weather (thunderstorm, >105°F, <10°F, >35mph wind, heavy rain) or high-severity advisories
+- AI-generated local advisories (events, road closures, police activity, construction, crowd levels) via OpenAI, time-window-aware
+- Advisory prompt includes exact run start/end times; advisories include timing (active_now/upcoming/ending_soon/all_day), crowd levels, and startsIn/endsIn
+- Advisory cache uses 10-min TTL with time-bucketed keys (location + duration bucket + 10-min time bucket) to keep timing-relative fields fresh
+- Upcoming high-impact events apply score penalties; ending-soon events get small score boosts
+- Routes flagged `notRecommended` for: extreme weather during run window, upcoming extreme crowd/high-severity events, or currently active high-severity advisories
+- Weather summary groups advisories by timing status (Active now / Starting soon / Clearing)
 - Goal-specific elevation profiles (steep for mountain hiking, flat for speed/recovery)
 - Training goal weight system for multi-factor scoring
 - Environmental condition awareness (temperature, time of day, shade)

@@ -535,14 +535,21 @@ interface LocalAdvisory {
   title: string;
   description: string;
   area: string;
+  timing: "active_now" | "upcoming" | "ending_soon" | "all_day";
+  startsIn?: string;
+  endsIn?: string;
+  crowdLevel?: "low" | "moderate" | "high" | "extreme";
 }
 
 const advisoryCache = new Map<string, { advisories: LocalAdvisory[]; fetchedAt: number }>();
 
-async function fetchLocalAdvisories(lat: number, lng: number, timeOfDay?: string): Promise<LocalAdvisory[]> {
-  const cacheKey = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+async function fetchLocalAdvisories(lat: number, lng: number, timeOfDay?: string, runDurationMinutes?: number): Promise<LocalAdvisory[]> {
+  const duration = runDurationMinutes || 30;
+  const timeBucket = Math.floor(Date.now() / (10 * 60 * 1000));
+  const durationBucket = Math.ceil(duration / 15) * 15;
+  const cacheKey = `${lat.toFixed(2)},${lng.toFixed(2)},${durationBucket},${timeBucket}`;
   const cached = advisoryCache.get(cacheKey);
-  if (cached && Date.now() - cached.fetchedAt < 30 * 60 * 1000) {
+  if (cached && Date.now() - cached.fetchedAt < 10 * 60 * 1000) {
     return cached.advisories;
   }
 
@@ -552,30 +559,46 @@ async function fetchLocalAdvisories(lat: number, lng: number, timeOfDay?: string
     const month = now.toLocaleDateString("en-US", { month: "long" });
     const timeStr = timeOfDay || "morning";
 
+    const startTimeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+    const endTime = new Date(now.getTime() + duration * 60 * 1000);
+    const endTimeStr = `${endTime.getHours().toString().padStart(2, "0")}:${endTime.getMinutes().toString().padStart(2, "0")}`;
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `You are a local area advisory system for runners. Given coordinates, provide realistic advisories about temporary events, road closures, construction, police activity, or hazards that could affect running routes in the area. Consider the time of day, day of week, and season. Be realistic — most areas will have 0-3 active advisories. Return a JSON array.`,
+          content: `You are a local area advisory system for runners. Given coordinates, time, and a run duration window, provide realistic advisories about events, road closures, construction, police activity, crowd conditions, or hazards that could affect running routes — both currently active AND those expected to start during the runner's time window. Consider how conditions like crowd levels, traffic, and event setup/teardown change over the run duration. Be realistic — most areas will have 0-4 advisories. Return a JSON array.`,
         },
         {
           role: "user",
           content: `Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}
 Day: ${dayOfWeek}, ${month} ${now.getDate()}, ${now.getFullYear()}
+Current time: ${startTimeStr}
 Time of day: ${timeStr}
+Run window: ${startTimeStr} through ${endTimeStr} (${duration} minutes)
 
-Return a JSON array of current advisories affecting runners in this area. Each advisory should have:
+Return a JSON array of advisories affecting runners in this area during the ENTIRE run window (not just right now). Include events that are:
+- Currently active
+- Starting during the run window
+- Building up (e.g., crowds arriving for an upcoming event)
+- Ending during the run (where conditions may improve)
+
+Each advisory should have:
 - type: "event" | "road_closure" | "police_activity" | "construction" | "weather_hazard" | "other"
 - severity: "low" | "medium" | "high"
 - title: short title
-- description: brief description of impact on runners
+- description: brief description of impact on runners, mentioning timing
 - area: general area/street name affected
+- timing: "active_now" | "upcoming" | "ending_soon" | "all_day"
+- startsIn: if upcoming, when it starts relative to now (e.g., "30 minutes", "1 hour") — omit if active_now or all_day
+- endsIn: if ending_soon, when it ends (e.g., "45 minutes") — omit if not applicable
+- crowdLevel: expected crowd impact — "low" | "moderate" | "high" | "extreme" — omit if not crowd-related
 
-Return [] if no significant advisories. Be realistic — don't fabricate events, but consider typical patterns for this type of area, day, and time. Return ONLY the JSON array, no other text.`,
+Return [] if no significant advisories. Be realistic — don't fabricate events, but consider typical patterns for this type of area, day, time, and upcoming hours. Return ONLY the JSON array, no other text.`,
         },
       ],
-      max_completion_tokens: 500,
+      max_completion_tokens: 800,
       temperature: 0.7,
     });
 
@@ -592,6 +615,8 @@ Return [] if no significant advisories. Be realistic — don't fabricate events,
 
     const validTypes = ["event", "road_closure", "police_activity", "construction", "weather_hazard", "other"];
     const validSeverities = ["low", "medium", "high"];
+    const validTimings = ["active_now", "upcoming", "ending_soon", "all_day"];
+    const validCrowdLevels = ["low", "moderate", "high", "extreme"];
 
     const advisories: LocalAdvisory[] = parsed
       .filter((item: any) =>
@@ -603,13 +628,20 @@ Return [] if no significant advisories. Be realistic — don't fabricate events,
         validTypes.includes(item.type) &&
         validSeverities.includes(item.severity)
       )
-      .map((item: any) => ({
-        type: item.type,
-        severity: item.severity,
-        title: item.title.slice(0, 100),
-        description: item.description.slice(0, 200),
-        area: item.area.slice(0, 100),
-      }));
+      .map((item: any) => {
+        const advisory: LocalAdvisory = {
+          type: item.type,
+          severity: item.severity,
+          title: item.title.slice(0, 100),
+          description: item.description.slice(0, 200),
+          area: item.area.slice(0, 100),
+          timing: validTimings.includes(item.timing) ? item.timing : "active_now",
+        };
+        if (typeof item.startsIn === "string") advisory.startsIn = item.startsIn.slice(0, 50);
+        if (typeof item.endsIn === "string") advisory.endsIn = item.endsIn.slice(0, 50);
+        if (validCrowdLevels.includes(item.crowdLevel)) advisory.crowdLevel = item.crowdLevel;
+        return advisory;
+      });
 
     advisoryCache.set(cacheKey, { advisories, fetchedAt: Date.now() });
     if (advisoryCache.size > 50) {
@@ -673,9 +705,12 @@ export async function generateRoutes(params: RouteParams) {
   const goal = params.trainingGoal;
   const numRoutes = 3;
 
+  const estAvgPace = goal === "speed_workout" ? 8 : goal === "recovery" ? 11 : 9.5;
+  const estRunDuration = Math.round(params.distanceMiles * estAvgPace);
+
   const [forecast, advisories] = await Promise.all([
     fetchWeatherForecast(params.startLat, params.startLng),
-    fetchLocalAdvisories(params.startLat, params.startLng, params.timeOfDay),
+    fetchLocalAdvisories(params.startLat, params.startLng, params.timeOfDay, estRunDuration),
   ]);
 
   const liveWeather = forecast.current;
@@ -795,7 +830,7 @@ export async function generateRoutes(params: RouteParams) {
         scoreBreakdown.trafficScore * 0.10)
     );
 
-    const overallScore = Math.max(0, Math.min(100, baseScore - forecastPenalty));
+    const weatherAdjustedScore = baseScore - forecastPenalty;
 
     const names = ROUTE_NAMES[goal] || ROUTE_NAMES.general_fitness;
     const warnings: string[] = [];
@@ -841,9 +876,44 @@ export async function generateRoutes(params: RouteParams) {
       return Math.random() < 0.4 + r * 0.25;
     });
 
+    let hasUpcomingHighImpact = false;
     for (const advisory of routeAdvisories) {
       const prefix = advisory.severity === "high" ? "⚠️ " : "";
-      warnings.push(`${prefix}${advisory.title}: ${advisory.description} (near ${advisory.area})`);
+      let timingNote = "";
+      if (advisory.timing === "upcoming" && advisory.startsIn) {
+        timingNote = ` — starts in ${advisory.startsIn}`;
+        if (advisory.severity === "high" || advisory.crowdLevel === "extreme" || advisory.crowdLevel === "high") {
+          hasUpcomingHighImpact = true;
+        }
+      } else if (advisory.timing === "ending_soon" && advisory.endsIn) {
+        timingNote = ` — clearing in ~${advisory.endsIn}`;
+      }
+
+      let crowdNote = "";
+      if (advisory.crowdLevel === "extreme") crowdNote = " [Extreme crowds expected]";
+      else if (advisory.crowdLevel === "high") crowdNote = " [Heavy crowds expected]";
+      else if (advisory.crowdLevel === "moderate") crowdNote = " [Moderate crowds]";
+
+      warnings.push(`${prefix}${advisory.title}: ${advisory.description}${timingNote}${crowdNote} (near ${advisory.area})`);
+    }
+
+    if (hasUpcomingHighImpact) {
+      warnings.push("⚠️ High-impact event starting during your run — route may become crowded or blocked mid-run");
+    }
+
+    let advisoryPenalty = 0;
+    for (const adv of routeAdvisories) {
+      if (adv.timing === "upcoming" && adv.severity === "high") advisoryPenalty += 8;
+      if (adv.crowdLevel === "extreme") advisoryPenalty += 10;
+      else if (adv.crowdLevel === "high") advisoryPenalty += 5;
+      if (adv.timing === "ending_soon") advisoryPenalty -= 2;
+    }
+
+    const overallScore = Math.max(0, Math.min(100, weatherAdjustedScore - advisoryPenalty));
+
+    const endingSoonAdvisories = routeAdvisories.filter(a => a.timing === "ending_soon");
+    if (endingSoonAdvisories.length > 0) {
+      highlights.push(`Conditions improving: ${endingSoonAdvisories.map(a => `${a.title} clearing${a.endsIn ? " in ~" + a.endsIn : " soon"}`).join("; ")}`);
     }
 
     if (totalElevationGain > 200) highlights.push(`${Math.round(totalElevationGain)}ft total elevation gain`);
@@ -889,7 +959,18 @@ export async function generateRoutes(params: RouteParams) {
     }
 
     if (demotedByForecast) {
-      warnings.push("⚠️ This route was ranked lower due to worsening conditions during the run");
+      warnings.push("⚠️ This route was ranked lower due to worsening weather conditions during the run");
+    }
+
+    const upcomingExtremeAdvisories = routeAdvisories.filter(
+      a => a.timing === "upcoming" && (a.severity === "high" || a.crowdLevel === "extreme")
+    );
+    if (upcomingExtremeAdvisories.length > 0 && !notRecommended) {
+      notRecommended = true;
+      notRecommendedReason = upcomingExtremeAdvisories.map(a =>
+        `${a.title} starting ${a.startsIn ? "in " + a.startsIn : "during your run"}`
+      ).join("; ");
+      warnings.push("⚠️ This route was ranked lower due to events/conditions expected to start during your run");
     }
 
     const highSeverityAdvisories = routeAdvisories.filter(a => a.severity === "high");
@@ -969,8 +1050,24 @@ export async function generateRoutes(params: RouteParams) {
   );
 
   if (advisories.length > 0) {
-    const advisorySummary = advisories.map(a => `${a.title} (${a.area})`).join(", ");
-    weatherSummary.recommendation += ` Local advisories: ${advisorySummary}.`;
+    const activeNow = advisories.filter(a => a.timing === "active_now" || a.timing === "all_day");
+    const upcoming = advisories.filter(a => a.timing === "upcoming");
+    const ending = advisories.filter(a => a.timing === "ending_soon");
+
+    const parts: string[] = [];
+    if (activeNow.length > 0) {
+      parts.push(`Active now: ${activeNow.map(a => `${a.title} (${a.area})`).join(", ")}`);
+    }
+    if (upcoming.length > 0) {
+      parts.push(`Starting soon: ${upcoming.map(a => `${a.title}${a.startsIn ? " in " + a.startsIn : ""} (${a.area})`).join(", ")}`);
+    }
+    if (ending.length > 0) {
+      parts.push(`Clearing: ${ending.map(a => `${a.title}${a.endsIn ? " in ~" + a.endsIn : ""} (${a.area})`).join(", ")}`);
+    }
+
+    if (parts.length > 0) {
+      weatherSummary.recommendation += ` Local advisories — ${parts.join(". ")}.`;
+    }
   }
 
   return {
