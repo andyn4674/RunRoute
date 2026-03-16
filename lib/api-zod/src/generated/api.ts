@@ -101,8 +101,11 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Generate personalized running routes
  */
-export const generateRoutesBodyDistanceMilesMin = 0.5;
-export const generateRoutesBodyDistanceMilesMax = 30;
+export const generateRoutesBodyDistanceMinMilesMin = 0.5;
+export const generateRoutesBodyDistanceMinMilesMax = 30;
+
+export const generateRoutesBodyDistanceMaxMilesMin = 0.5;
+export const generateRoutesBodyDistanceMaxMilesMax = 30;
 
 export const generateRoutesBodyHumidityMin = 0;
 export const generateRoutesBodyHumidityMax = 100;
@@ -121,10 +124,16 @@ export const GenerateRoutesBody = zod.object({
     "endurance",
     "general_fitness",
   ]),
-  distanceMiles: zod
+  distanceMinMiles: zod
     .number()
-    .min(generateRoutesBodyDistanceMilesMin)
-    .max(generateRoutesBodyDistanceMilesMax),
+    .min(generateRoutesBodyDistanceMinMilesMin)
+    .max(generateRoutesBodyDistanceMinMilesMax)
+    .describe("Minimum target distance in miles."),
+  distanceMaxMiles: zod
+    .number()
+    .min(generateRoutesBodyDistanceMaxMilesMin)
+    .max(generateRoutesBodyDistanceMaxMilesMax)
+    .describe("Maximum target distance in miles. Must be >= distanceMinMiles."),
   startLat: zod.number(),
   startLng: zod.number(),
   temperatureF: zod.number().optional(),

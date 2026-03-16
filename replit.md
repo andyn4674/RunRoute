@@ -44,7 +44,7 @@ artifacts-monorepo/
 A web application that generates personalized running routes based on training goals and environmental conditions.
 
 ### Features
-- **Route Generation** — Select training goal (mountain hiking, heat tolerance, recovery, speed, endurance, general), distance, time of day, and start location on interactive map
+- **Route Generation** — Select training goal (mountain hiking, heat tolerance, recovery, speed, endurance, general), distance range (min–max), time of day, and start location on interactive map
 - **AI Route Coach** — Chat with an AI assistant to describe your ideal run in natural language; AI extracts route parameters and applies them to the form
 - **Smart Scoring** — Routes scored across 6 dimensions: terrain match, safety, environmental fit, training effectiveness, shade, traffic
 - **Interactive Map** — Leaflet/OpenStreetMap with colored route polylines and waypoint markers

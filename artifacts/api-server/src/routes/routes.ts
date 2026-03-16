@@ -12,7 +12,8 @@ router.post("/routes/generate", async (req, res) => {
     const parsed = GenerateRoutesBody.parse(req.body);
     const result = await generateRoutes({
       trainingGoal: parsed.trainingGoal,
-      distanceMiles: parsed.distanceMiles,
+      distanceMinMiles: parsed.distanceMinMiles,
+      distanceMaxMiles: parsed.distanceMaxMiles,
       startLat: parsed.startLat,
       startLng: parsed.startLng,
       temperatureF: parsed.temperatureF ?? undefined,

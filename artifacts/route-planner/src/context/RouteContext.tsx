@@ -13,7 +13,8 @@ interface RouteState {
 
 const defaultForm: Partial<RouteRequest> = {
   trainingGoal: "general_fitness" as any,
-  distanceMiles: 3.1,
+  distanceMinMiles: 2,
+  distanceMaxMiles: 5,
   startLat: 37.7749,
   startLng: -122.4194,
   timeOfDay: "morning" as any,

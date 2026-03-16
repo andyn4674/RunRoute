@@ -53,10 +53,17 @@ export const RouteRequestRouteType = {
 export interface RouteRequest {
   trainingGoal: TrainingGoal;
   /**
+   * Minimum target distance in miles.
    * @minimum 0.5
    * @maximum 30
    */
-  distanceMiles: number;
+  distanceMinMiles: number;
+  /**
+   * Maximum target distance in miles. Must be >= distanceMinMiles.
+   * @minimum 0.5
+   * @maximum 30
+   */
+  distanceMaxMiles: number;
   startLat: number;
   startLng: number;
   temperatureF?: number;

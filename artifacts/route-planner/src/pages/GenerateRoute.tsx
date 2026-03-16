@@ -35,8 +35,16 @@ export default function GenerateRoute() {
       if (params.trainingGoal && validGoals.includes(params.trainingGoal)) {
         updated.trainingGoal = params.trainingGoal as any;
       }
-      if (typeof params.distanceMiles === "number" && params.distanceMiles >= 0.5 && params.distanceMiles <= 30) {
-        updated.distanceMiles = params.distanceMiles;
+      if (typeof params.distanceMiles === "number" && params.distanceMiles >= 1 && params.distanceMiles <= 26.2) {
+        const d = params.distanceMiles;
+        updated.distanceMinMiles = Math.max(1, Math.round((d * 0.8) * 10) / 10);
+        updated.distanceMaxMiles = Math.min(26.2, Math.round((d * 1.2) * 10) / 10);
+      }
+      if (typeof params.distanceMinMiles === "number") {
+        updated.distanceMinMiles = Math.max(1, Math.min(params.distanceMinMiles, (updated.distanceMaxMiles || 26.2) - 0.5));
+      }
+      if (typeof params.distanceMaxMiles === "number") {
+        updated.distanceMaxMiles = Math.min(26.2, Math.max(params.distanceMaxMiles, (updated.distanceMinMiles || 1) + 0.5));
       }
       if (params.timeOfDay && validTimes.includes(params.timeOfDay)) {
         updated.timeOfDay = params.timeOfDay as any;
@@ -63,8 +71,8 @@ export default function GenerateRoute() {
   }, [toast, setForm]);
 
   const handleGenerate = () => {
-    if (!form.trainingGoal || !form.distanceMiles || !form.startLat || !form.startLng) {
-      toast({ title: "Missing fields", description: "Please select a location and distance.", variant: "destructive" });
+    if (!form.trainingGoal || !form.distanceMinMiles || !form.distanceMaxMiles || !form.startLat || !form.startLng) {
+      toast({ title: "Missing fields", description: "Please select a location and distance range.", variant: "destructive" });
       return;
     }
 
@@ -120,16 +128,43 @@ export default function GenerateRoute() {
           <div className="space-y-6">
             <div>
               <div className="flex justify-between mb-2">
-                <label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Target Distance</label>
-                <span className="text-primary font-display">{form.distanceMiles} mi</span>
+                <label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Distance Range</label>
+                <span className="text-primary font-display">{form.distanceMinMiles}–{form.distanceMaxMiles} mi</span>
               </div>
-              <input 
-                type="range" 
-                min="1" max="26.2" step="0.1" 
-                value={form.distanceMiles}
-                onChange={(e) => setForm(prev => ({ ...prev, distanceMiles: parseFloat(e.target.value) }))}
-                className="w-full accent-primary bg-muted rounded-full h-2 appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(255,69,0,0.8)]"
-              />
+              <div className="relative h-10 flex items-center">
+                <div className="absolute inset-x-0 h-2 bg-muted rounded-full" />
+                <div 
+                  className="absolute h-2 bg-primary/60 rounded-full" 
+                  style={{ 
+                    left: `${((form.distanceMinMiles || 1) - 1) / 25.2 * 100}%`, 
+                    right: `${100 - ((form.distanceMaxMiles || 5) - 1) / 25.2 * 100}%` 
+                  }} 
+                />
+                <input 
+                  type="range" 
+                  min="1" max="26.2" step="0.1" 
+                  value={form.distanceMinMiles}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setForm(prev => ({ ...prev, distanceMinMiles: Math.min(val, (prev.distanceMaxMiles || 5) - 0.5) }));
+                  }}
+                  className="absolute inset-x-0 w-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(255,69,0,0.8)] [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-10 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:cursor-pointer"
+                />
+                <input 
+                  type="range" 
+                  min="1" max="26.2" step="0.1" 
+                  value={form.distanceMaxMiles}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setForm(prev => ({ ...prev, distanceMaxMiles: Math.max(val, (prev.distanceMinMiles || 1) + 0.5) }));
+                  }}
+                  className="absolute inset-x-0 w-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(255,69,0,0.8)] [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-20 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:cursor-pointer"
+                />
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                <span>1 mi</span>
+                <span>26.2 mi</span>
+              </div>
             </div>
 
             <div>

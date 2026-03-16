@@ -12,6 +12,8 @@ interface Message {
 interface RouteParams {
   trainingGoal?: string;
   distanceMiles?: number;
+  distanceMinMiles?: number;
+  distanceMaxMiles?: number;
   timeOfDay?: string;
   preferShade?: boolean;
   avoidTraffic?: boolean;
@@ -329,9 +331,13 @@ export function RouteChat({ onApplyParams }: RouteChatProps) {
                           pendingParams.trainingGoal}
                       </span>
                     )}
-                    {pendingParams.distanceMiles && (
+                    {(pendingParams.distanceMiles || pendingParams.distanceMinMiles || pendingParams.distanceMaxMiles) && (
                       <span className="px-2 py-1 bg-secondary/20 text-secondary text-xs rounded-lg font-semibold">
-                        {pendingParams.distanceMiles} mi
+                        {pendingParams.distanceMinMiles && pendingParams.distanceMaxMiles
+                          ? `${pendingParams.distanceMinMiles}–${pendingParams.distanceMaxMiles} mi`
+                          : pendingParams.distanceMiles
+                            ? `~${pendingParams.distanceMiles} mi`
+                            : `${pendingParams.distanceMinMiles || pendingParams.distanceMaxMiles} mi`}
                       </span>
                     )}
                     {pendingParams.timeOfDay && (

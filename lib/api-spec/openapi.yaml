@@ -415,10 +415,16 @@ components:
       properties:
         trainingGoal:
           $ref: "#/components/schemas/TrainingGoal"
-        distanceMiles:
+        distanceMinMiles:
           type: number
           minimum: 0.5
           maximum: 30
+          description: Minimum target distance in miles.
+        distanceMaxMiles:
+          type: number
+          minimum: 0.5
+          maximum: 30
+          description: Maximum target distance in miles. Must be >= distanceMinMiles.
         startLat:
           type: number
         startLng:
@@ -451,7 +457,8 @@ components:
           description: "'loop' generates a circular route returning to start. 'one_way' generates a point-to-point route where distance is one direction only."
       required:
         - trainingGoal
-        - distanceMiles
+        - distanceMinMiles
+        - distanceMaxMiles
         - startLat
         - startLng
 

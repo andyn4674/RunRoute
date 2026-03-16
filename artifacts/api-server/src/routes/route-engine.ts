@@ -2,7 +2,8 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 
 interface RouteParams {
   trainingGoal: string;
-  distanceMiles: number;
+  distanceMinMiles: number;
+  distanceMaxMiles: number;
   startLat: number;
   startLng: number;
   temperatureF?: number;
@@ -816,8 +817,14 @@ export async function generateRoutes(params: RouteParams) {
   const goal = params.trainingGoal;
   const numRoutes = 3;
 
+  if (params.distanceMaxMiles < params.distanceMinMiles) {
+    const tmp = params.distanceMinMiles;
+    params.distanceMinMiles = params.distanceMaxMiles;
+    params.distanceMaxMiles = tmp;
+  }
+  const midpointMiles = (params.distanceMinMiles + params.distanceMaxMiles) / 2;
   const estAvgPace = goal === "speed_workout" ? 8 : goal === "recovery" ? 11 : 9.5;
-  const estRunDuration = Math.round(params.distanceMiles * estAvgPace);
+  const estRunDuration = Math.round(midpointMiles * estAvgPace);
 
   const [forecast, advisories] = await Promise.all([
     fetchWeatherForecast(params.startLat, params.startLng),
@@ -833,31 +840,32 @@ export async function generateRoutes(params: RouteParams) {
   const routePromises = Array.from({ length: numRoutes }, async (_, r) => {
     const isOneWay = params.routeType === "one_way";
     const numViaPoints = 6 + Math.floor(Math.random() * 4);
+    const spreadPosition = r / (numRoutes - 1);
+    const targetMilesForVariant = params.distanceMinMiles + (params.distanceMaxMiles - params.distanceMinMiles) * spreadPosition;
+    const variantMaxKm = targetMilesForVariant * 1.60934;
     const viaPoints = isOneWay
       ? generateOneWayViaPoints(
           params.startLat,
           params.startLng,
-          params.distanceMiles,
+          targetMilesForVariant,
           numViaPoints,
           r
         )
       : generateLoopViaPoints(
           params.startLat,
           params.startLng,
-          params.distanceMiles,
+          targetMilesForVariant,
           numViaPoints,
           r
         );
 
     let routePoints: Array<{ lat: number; lng: number }>;
     let usedRoadRouting = false;
-    const targetKm = params.distanceMiles * 1.60934;
-    const tolerance = 1.15;
 
     const osrmResult = await snapToRoads(viaPoints);
     if (osrmResult && osrmResult.points.length > 2) {
-      if (osrmResult.distanceKm > targetKm * tolerance) {
-        routePoints = trimRouteToDistance(osrmResult.points, targetKm, !isOneWay);
+      if (osrmResult.distanceKm > variantMaxKm) {
+        routePoints = trimRouteToDistance(osrmResult.points, variantMaxKm, !isOneWay);
       } else {
         routePoints = osrmResult.points;
       }
@@ -887,7 +895,7 @@ export async function generateRoutes(params: RouteParams) {
       );
     }
     const totalDistanceMiles = totalDistanceKm / 1.60934;
-    const displayDistance = usedRoadRouting ? Math.round(totalDistanceMiles * 100) / 100 : Math.round(params.distanceMiles * 100) / 100;
+    const displayDistance = usedRoadRouting ? Math.round(totalDistanceMiles * 100) / 100 : Math.round(targetMilesForVariant * 100) / 100;
 
     const numSegments = routePoints.length - 1;
     const segments = [];
