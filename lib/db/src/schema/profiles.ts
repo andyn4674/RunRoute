@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const profilesTable = pgTable("profiles", {
   id: serial("id").primaryKey(),
+  userId: text("user_id"),
   nickname: text("nickname").notNull().default("Runner"),
   preferredGoals: jsonb("preferred_goals").notNull().$type<string[]>().default([]),
   preferredDistanceMiles: real("preferred_distance_miles").notNull().default(5),

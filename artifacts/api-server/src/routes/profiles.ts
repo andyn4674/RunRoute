@@ -5,13 +5,18 @@ import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-const DEFAULT_PROFILE_ID = 1;
+function getUserId(req: any): string | null {
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    return req.user.id;
+  }
+  return null;
+}
 
-async function getOrCreateProfile() {
+async function getOrCreateProfile(userId: string) {
   const existing = await db
     .select()
     .from(profilesTable)
-    .where(eq(profilesTable.id, DEFAULT_PROFILE_ID))
+    .where(eq(profilesTable.userId, userId))
     .limit(1);
 
   if (existing.length > 0) return existing[0];
@@ -19,6 +24,7 @@ async function getOrCreateProfile() {
   const [created] = await db
     .insert(profilesTable)
     .values({
+      userId,
       nickname: "Runner",
       preferredGoals: ["general_fitness"],
       preferredDistanceMiles: 5,
@@ -31,6 +37,20 @@ async function getOrCreateProfile() {
 
   return created;
 }
+
+const DEFAULT_PROFILE = {
+  id: 0,
+  nickname: "Runner",
+  preferredGoals: ["general_fitness"],
+  preferredDistanceMiles: 5,
+  averagePaceMinsPerMile: 10,
+  preferredSurfaces: ["pavement"],
+  heatTolerance: "moderate",
+  elevationTolerance: "moderate",
+  totalRunsLogged: 0,
+  totalMilesRun: 0,
+  createdAt: new Date().toISOString(),
+};
 
 function formatProfile(profile: any) {
   return {
@@ -48,9 +68,14 @@ function formatProfile(profile: any) {
   };
 }
 
-router.get("/profiles", async (_req, res) => {
+router.get("/profiles", async (req, res) => {
   try {
-    const profile = await getOrCreateProfile();
+    const userId = getUserId(req);
+    if (!userId) {
+      res.json(DEFAULT_PROFILE);
+      return;
+    }
+    const profile = await getOrCreateProfile(userId);
     res.json(formatProfile(profile));
   } catch (error: any) {
     console.error("Get profile error:", error?.message || error);
@@ -60,8 +85,13 @@ router.get("/profiles", async (_req, res) => {
 
 router.put("/profiles", async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: "Login required to update profile" });
+      return;
+    }
     const updates = UpdateProfileBody.parse(req.body);
-    await getOrCreateProfile();
+    const profile = await getOrCreateProfile(userId);
 
     const updateData: Record<string, any> = {};
     if (updates.nickname !== undefined) updateData.nickname = updates.nickname;
@@ -75,7 +105,7 @@ router.put("/profiles", async (req, res) => {
     const [updated] = await db
       .update(profilesTable)
       .set(updateData)
-      .where(eq(profilesTable.id, DEFAULT_PROFILE_ID))
+      .where(eq(profilesTable.id, profile.id))
       .returning();
 
     res.json(formatProfile(updated));

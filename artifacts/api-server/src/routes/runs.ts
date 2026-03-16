@@ -5,22 +5,62 @@ import { desc, eq, sql, count } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-const DEFAULT_PROFILE_ID = 1;
+function getUserId(req: any): string | null {
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    return req.user.id;
+  }
+  return null;
+}
+
+async function getOrCreateProfile(userId: string) {
+  const existing = await db
+    .select()
+    .from(profilesTable)
+    .where(eq(profilesTable.userId, userId))
+    .limit(1);
+
+  if (existing.length > 0) return existing[0];
+
+  const [created] = await db
+    .insert(profilesTable)
+    .values({
+      userId,
+      nickname: "Runner",
+      preferredGoals: ["general_fitness"],
+      preferredDistanceMiles: 5,
+      averagePaceMinsPerMile: 10,
+      preferredSurfaces: ["pavement"],
+      heatTolerance: "moderate",
+      elevationTolerance: "moderate",
+    })
+    .returning();
+
+  return created;
+}
 
 router.get("/runs", async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      res.json({ runs: [], total: 0 });
+      return;
+    }
+
     const params = ListRunsQueryParams.parse(req.query);
     const limit = params.limit ?? 20;
     const offset = params.offset ?? 0;
 
+    const whereClause = eq(runsTable.userId, userId);
+
     const runs = await db
       .select()
       .from(runsTable)
+      .where(whereClause)
       .orderBy(desc(runsTable.completedAt))
       .limit(limit)
       .offset(offset);
 
-    const [totalResult] = await db.select({ count: count() }).from(runsTable);
+    const [totalResult] = await db.select({ count: count() }).from(runsTable).where(whereClause);
 
     const response = ListRunsResponse.parse({
       runs: runs.map((r) => ({
@@ -48,12 +88,19 @@ router.get("/runs", async (req, res) => {
 
 router.post("/runs", async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: "Login required to log runs" });
+      return;
+    }
+
     const body = LogRunBody.parse(req.body);
     const avgPace = body.durationMinutes / body.distanceMiles;
 
     const [run] = await db
       .insert(runsTable)
       .values({
+        userId,
         routeId: body.routeId,
         trainingGoal: body.trainingGoal,
         distanceMiles: body.distanceMiles,
@@ -66,13 +113,14 @@ router.post("/runs", async (req, res) => {
       })
       .returning();
 
+    const profile = await getOrCreateProfile(userId);
     await db
       .update(profilesTable)
       .set({
         totalRunsLogged: sql`${profilesTable.totalRunsLogged} + 1`,
         totalMilesRun: sql`${profilesTable.totalMilesRun} + ${body.distanceMiles}`,
       })
-      .where(eq(profilesTable.id, DEFAULT_PROFILE_ID));
+      .where(eq(profilesTable.id, profile.id));
 
     res.status(201).json({
       id: run.id,

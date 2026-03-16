@@ -54,6 +54,12 @@ A web application that generates personalized running routes based on training g
 - **Weather Integration** — Weather summary with recommendations for running conditions
 
 ### API Endpoints
+- `GET /api/auth/user` — Get current authenticated user (or null)
+- `GET /api/login` — Start browser OIDC login flow
+- `GET /api/callback` — Complete browser OIDC login flow
+- `GET /api/logout` — Clear session and begin OIDC logout
+- `POST /api/mobile-auth/token-exchange` — Exchange mobile OIDC code for session token
+- `POST /api/mobile-auth/logout` — Delete a mobile session token
 - `POST /api/routes/generate` — Generate 3 optimized routes based on parameters
 - `GET /api/routes/:routeId` — Get cached route details
 - `GET /api/routes/scoring-factors` — Get scoring weights for each training goal
@@ -68,9 +74,20 @@ A web application that generates personalized running routes based on training g
 - `GET /api/openai/conversations/:id/messages` — List messages
 - `POST /api/openai/conversations/:id/messages` — Send message (SSE streaming response)
 
+### Authentication
+- **Auth system**: Replit Auth OIDC (openid-client v6 functional API)
+- **Session management**: DB-backed sessions in `sessions` table, 7-day TTL, cookie (`sid`) or Bearer token
+- **Auth middleware**: `authMiddleware` loads user from session on every request; sets `req.user` + `req.isAuthenticated()`
+- **Frontend hook**: `useAuth()` from `@workspace/replit-auth-web` — provides `user`, `isAuthenticated`, `isLoading`, `login()`, `logout()`
+- **Data isolation**: Profiles and runs are scoped to authenticated user (`userId`). Anonymous users get safe defaults (empty runs, default profile) and cannot write.
+- **Auth routes**: `/api/login`, `/api/callback`, `/api/logout`, `/api/auth/user`, `/api/mobile-auth/token-exchange`, `/api/mobile-auth/logout`
+- **DO NOT** use "Replit" in user-facing UI; no custom login forms
+
 ### Database Tables
-- `profiles` — User preferences (heat/elevation tolerance, preferred goals, surfaces, stats)
-- `runs` — Run history (distance, duration, effort, elevation, temperature)
+- `users` — Auth user records (synced from OIDC claims)
+- `sessions` — Server-side session store (sid, sess JSON, expire)
+- `profiles` — User preferences (heat/elevation tolerance, preferred goals, surfaces, stats); scoped by `userId`
+- `runs` — Run history (distance, duration, effort, elevation, temperature); scoped by `userId`
 - `conversations` — AI chat conversations
 - `messages` — Chat messages (user and assistant roles)
 
