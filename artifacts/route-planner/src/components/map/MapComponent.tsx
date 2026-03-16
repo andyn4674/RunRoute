@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, useMapEvents, Popup } from 'react-leaflet';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { MapContainer, TileLayer, Polyline, Marker, useMapEvents, useMap, Popup } from 'react-leaflet';
 import L from 'leaflet';
+import { Crosshair, Loader2 } from 'lucide-react';
 import type { GeneratedRoute } from '@workspace/api-client-react';
 
-// Fix for default Leaflet icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -11,12 +11,18 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Custom dot marker for waypoints
 const createDotIcon = (color: string) => L.divIcon({
   className: 'custom-dot-marker',
   html: `<div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px ${color}80;"></div>`,
   iconSize: [12, 12],
   iconAnchor: [6, 6]
+});
+
+const userLocationIcon = L.divIcon({
+  className: 'user-location-marker',
+  html: `<div style="width: 18px; height: 18px; border-radius: 50%; background: #4285F4; border: 3px solid white; box-shadow: 0 0 12px rgba(66,133,244,0.6);"></div>`,
+  iconSize: [18, 18],
+  iconAnchor: [9, 9]
 });
 
 interface MapComponentProps {
@@ -27,7 +33,7 @@ interface MapComponentProps {
   className?: string;
 }
 
-const ROUTE_COLORS = ['#FF4500', '#00E5FF', '#A020F0']; // Primary, Secondary, Accent
+const ROUTE_COLORS = ['#FF4500', '#00E5FF', '#A020F0'];
 
 function LocationMarker({ onSelect }: { onSelect?: (lat: number, lng: number) => void }) {
   useMapEvents({
@@ -40,8 +46,65 @@ function LocationMarker({ onSelect }: { onSelect?: (lat: number, lng: number) =>
   return null;
 }
 
+function FlyToLocation({ position }: { position: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (position) {
+      map.flyTo(position, 15, { duration: 1.2 });
+    }
+  }, [position, map]);
+  return null;
+}
+
 export function MapComponent({ startLocation, onLocationSelect, routes = [], selectedRouteId, className = "h-[400px]" }: MapComponentProps) {
-  const defaultCenter: [number, number] = [37.7749, -122.4194]; // San Francisco default
+  const defaultCenter: [number, number] = [37.7749, -122.4194];
+  const [locating, setLocating] = useState(false);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null);
+
+  const handleLocate = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setLocating(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation([latitude, longitude]);
+        setFlyTarget([latitude, longitude]);
+        if (onLocationSelect) {
+          onLocationSelect(latitude, longitude);
+        }
+        setLocating(false);
+      },
+      (error) => {
+        setLocating(false);
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setLocationError("Location access denied. Please enable location in your browser settings.");
+            break;
+          case error.POSITION_UNAVAILABLE:
+            setLocationError("Location unavailable. Try again.");
+            break;
+          case error.TIMEOUT:
+            setLocationError("Location request timed out. Try again.");
+            break;
+          default:
+            setLocationError("Unable to get location.");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      }
+    );
+  }, [onLocationSelect]);
 
   return (
     <div className={`rounded-2xl overflow-hidden border border-border shadow-xl relative z-10 ${className}`}>
@@ -57,6 +120,13 @@ export function MapComponent({ startLocation, onLocationSelect, routes = [], sel
         />
         
         {onLocationSelect && <LocationMarker onSelect={onLocationSelect} />}
+        <FlyToLocation position={flyTarget} />
+
+        {userLocation && (
+          <Marker position={userLocation} icon={userLocationIcon}>
+            <Popup className="bg-card text-foreground font-sans">Your Location</Popup>
+          </Marker>
+        )}
 
         {startLocation && (
           <Marker position={startLocation} icon={createDotIcon('#FF4500')}>
@@ -83,7 +153,6 @@ export function MapComponent({ startLocation, onLocationSelect, routes = [], sel
                 }}
               />
               {isSelected && route.waypoints.map((wp, wIdx) => {
-                // Show a small marker every few waypoints or at specific named points
                 if (wIdx === 0 || wIdx === route.waypoints.length - 1 || wp.name) {
                   return (
                     <Marker key={wIdx} position={[wp.lat, wp.lng]} icon={createDotIcon(color)}>
@@ -97,6 +166,30 @@ export function MapComponent({ startLocation, onLocationSelect, routes = [], sel
           );
         })}
       </MapContainer>
+
+      {onLocationSelect && (
+        <div className="absolute top-3 right-3 z-[1000] flex flex-col gap-2">
+          <button
+            onClick={handleLocate}
+            disabled={locating}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 bg-card/95 backdrop-blur-sm border border-border rounded-xl shadow-lg text-foreground hover:bg-muted transition-colors min-h-[44px] min-w-[44px]"
+            title="Use my location"
+          >
+            {locating ? (
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+            ) : (
+              <Crosshair className="w-5 h-5 text-primary" />
+            )}
+            <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline">Locate Me</span>
+          </button>
+        </div>
+      )}
+
+      {locationError && (
+        <div className="absolute bottom-3 left-3 right-3 z-[1000] bg-destructive/90 text-destructive-foreground text-xs font-medium px-3 py-2 rounded-lg backdrop-blur-sm">
+          {locationError}
+        </div>
+      )}
     </div>
   );
 }

@@ -85,10 +85,13 @@ A web application that generates personalized running routes based on training g
 
 ### Route Generation Engine
 Located in `artifacts/api-server/src/routes/route-engine.ts`. Uses:
-- Graph-based waypoint generation with distance-aware loop creation
+- OSRM pedestrian routing API (router.project-osrm.org/route/v1/foot/) to snap routes to actual roads/sidewalks
+- Generates via-points in a loop pattern, sends to OSRM for road-snapped geometry, decodes polyline response
+- Falls back to raw via-points if OSRM is unavailable (8s timeout)
 - Goal-specific elevation profiles (steep for mountain hiking, flat for speed/recovery)
 - Training goal weight system for multi-factor scoring
 - Environmental condition awareness (temperature, time of day, shade)
+- Async route generation with Promise.all for parallel OSRM calls
 
 ## TypeScript & Composite Projects
 
@@ -120,7 +123,7 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 React + Vite frontend for the running route planner.
 
 - Pages: Dashboard, GenerateRoute, RouteDetail, RunHistory, Profile
-- Components: Layout (sidebar + bottom tab nav), MapComponent (Leaflet), ScoreRadar (Recharts), ElevationProfile (Recharts), RouteChat (AI chat panel)
+- Components: Layout (sidebar + bottom tab nav), MapComponent (Leaflet + GPS geolocation), ScoreRadar (Recharts), ElevationProfile (Recharts), RouteChat (AI chat panel)
 - Mobile-first responsive design: bottom tab navigation on mobile, sidebar on desktop (md+)
 - Touch targets: min 44-48px for all interactive elements
 - iOS safe area support via viewport-fit=cover and env(safe-area-inset-bottom)

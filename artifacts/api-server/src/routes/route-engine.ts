@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from "crypto";
-
 interface RouteParams {
   trainingGoal: string;
   distanceMiles: number;
@@ -136,6 +134,112 @@ function destinationPoint(lat: number, lng: number, distanceKm: number, bearingD
   return [toDegrees(lat2), toDegrees(lng2)];
 }
 
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function decodePolyline(encoded: string): Array<{ lat: number; lng: number }> {
+  const points: Array<{ lat: number; lng: number }> = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte: number;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const dlat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const dlng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += dlng;
+
+    points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+
+  return points;
+}
+
+async function snapToRoads(
+  waypoints: Array<{ lat: number; lng: number }>,
+): Promise<Array<{ lat: number; lng: number }> | null> {
+  const coords = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(";");
+  const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=polyline&steps=false`;
+
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (data.code !== "Ok" || !data.routes?.[0]?.geometry) return null;
+
+    return decodePolyline(data.routes[0].geometry);
+  } catch {
+    return null;
+  }
+}
+
+function generateViaPoints(
+  startLat: number,
+  startLng: number,
+  distanceMiles: number,
+  numPoints: number,
+  routeVariant: number
+): Array<{ lat: number; lng: number }> {
+  const distanceKm = distanceMiles * 1.60934;
+  const perimeterKm = distanceKm;
+  const radiusKm = perimeterKm / (2 * Math.PI);
+
+  const baseAngle = routeVariant * 120 + (Math.random() * 30 - 15);
+  const points: Array<{ lat: number; lng: number }> = [];
+
+  for (let i = 0; i < numPoints; i++) {
+    const angle = baseAngle + (360 * i) / numPoints;
+    const r = radiusKm * (0.75 + Math.random() * 0.5);
+    const [lat, lng] = destinationPoint(startLat, startLng, r, angle);
+    points.push({ lat, lng });
+  }
+
+  return [{ lat: startLat, lng: startLng }, ...points, { lat: startLat, lng: startLng }];
+}
+
+function downsamplePoints(
+  points: Array<{ lat: number; lng: number }>,
+  maxPoints: number
+): Array<{ lat: number; lng: number }> {
+  if (points.length <= maxPoints) return points;
+  const result: Array<{ lat: number; lng: number }> = [points[0]];
+  const step = (points.length - 1) / (maxPoints - 1);
+  for (let i = 1; i < maxPoints - 1; i++) {
+    result.push(points[Math.round(i * step)]);
+  }
+  result.push(points[points.length - 1]);
+  return result;
+}
+
 function generateElevationProfile(
   numPoints: number,
   goal: string,
@@ -176,32 +280,6 @@ function generateElevationProfile(
   }
 
   return elevations;
-}
-
-function generateWaypoints(
-  startLat: number,
-  startLng: number,
-  distanceMiles: number,
-  numPoints: number,
-  routeVariant: number
-): Array<{ lat: number; lng: number }> {
-  const distanceKm = distanceMiles * 1.60934;
-  const perimeterKm = distanceKm;
-  const radiusKm = perimeterKm / (2 * Math.PI);
-
-  const baseAngle = routeVariant * 120;
-  const points: Array<{ lat: number; lng: number }> = [];
-
-  for (let i = 0; i < numPoints; i++) {
-    const angle = baseAngle + (360 * i) / numPoints;
-    const r = radiusKm * (0.7 + Math.random() * 0.6);
-    const [lat, lng] = destinationPoint(startLat, startLng, r, angle);
-    points.push({ lat, lng });
-  }
-
-  points.push({ lat: startLat, lng: startLng });
-
-  return [{ lat: startLat, lng: startLng }, ...points];
 }
 
 const SURFACE_TYPES = ["pavement", "gravel", "trail", "mixed"] as const;
@@ -347,37 +425,59 @@ function getWeatherSummary(params: RouteParams) {
   };
 }
 
-export function generateRoutes(params: RouteParams) {
+export async function generateRoutes(params: RouteParams) {
   const goal = params.trainingGoal;
   const numRoutes = 3;
   const routes = [];
 
-  for (let r = 0; r < numRoutes; r++) {
-    const numPoints = 8 + Math.floor(Math.random() * 5);
-    const waypoints = generateWaypoints(
+  const routePromises = Array.from({ length: numRoutes }, async (_, r) => {
+    const numViaPoints = 4 + Math.floor(Math.random() * 3);
+    const viaPoints = generateViaPoints(
       params.startLat,
       params.startLng,
       params.distanceMiles,
-      numPoints,
+      numViaPoints,
       r
     );
 
-    const baseElevation = 100 + Math.random() * 500;
-    const elevations = generateElevationProfile(waypoints.length, goal, baseElevation);
+    let routePoints: Array<{ lat: number; lng: number }>;
+    let usedRoadRouting = false;
 
-    const waypointsWithElevation = waypoints.map((wp, i) => ({
+    const snappedPoints = await snapToRoads(viaPoints);
+    if (snappedPoints && snappedPoints.length > 2) {
+      routePoints = downsamplePoints(snappedPoints, 30 + Math.floor(Math.random() * 20));
+      usedRoadRouting = true;
+    } else {
+      routePoints = viaPoints;
+    }
+
+    const baseElevation = 100 + Math.random() * 500;
+    const elevations = generateElevationProfile(routePoints.length, goal, baseElevation);
+
+    const waypointsWithElevation = routePoints.map((wp, i) => ({
       ...wp,
       elevation: elevations[i],
-      name: i === 0 ? "Start/Finish" : `Waypoint ${i}`,
+      name: i === 0 ? "Start/Finish" : i === routePoints.length - 1 ? "Start/Finish" : undefined,
     }));
 
+    let totalDistanceKm = 0;
+    for (let i = 0; i < routePoints.length - 1; i++) {
+      totalDistanceKm += haversineDistance(
+        routePoints[i].lat, routePoints[i].lng,
+        routePoints[i + 1].lat, routePoints[i + 1].lng
+      );
+    }
+    const totalDistanceMiles = totalDistanceKm / 1.60934;
+    const displayDistance = usedRoadRouting ? Math.round(totalDistanceMiles * 100) / 100 : Math.round(params.distanceMiles * 100) / 100;
+
+    const numSegments = routePoints.length - 1;
     const segments = [];
     let totalElevationGain = 0;
     let totalElevationLoss = 0;
     const surfaceCounts: Record<string, number> = {};
-    const segmentDistance = params.distanceMiles / (waypoints.length - 1);
+    const segmentDistance = displayDistance / numSegments;
 
-    for (let i = 0; i < waypoints.length - 1; i++) {
+    for (let i = 0; i < numSegments; i++) {
       const elevGain = Math.max(0, elevations[i + 1] - elevations[i]);
       const elevLoss = Math.max(0, elevations[i] - elevations[i + 1]);
       totalElevationGain += elevGain;
@@ -402,17 +502,16 @@ export function generateRoutes(params: RouteParams) {
       });
     }
 
-    const totalSegments = waypoints.length - 1;
     const surfaceBreakdown: Record<string, number> = {};
     for (const [surface, count] of Object.entries(surfaceCounts)) {
-      surfaceBreakdown[surface] = Math.round((count / totalSegments) * 100);
+      surfaceBreakdown[surface] = Math.round((count / numSegments) * 100);
     }
 
     const scoreBreakdown = computeScoreBreakdown(
       segments,
       goal,
       totalElevationGain,
-      params.distanceMiles,
+      displayDistance,
       params.temperatureF
     );
 
@@ -426,12 +525,13 @@ export function generateRoutes(params: RouteParams) {
     );
 
     const avgPace = goal === "speed_workout" ? 7 + Math.random() * 2 : goal === "recovery" ? 10 + Math.random() * 2 : 8.5 + Math.random() * 2;
-    const estimatedDuration = Math.round(params.distanceMiles * avgPace);
+    const estimatedDuration = Math.round(displayDistance * avgPace);
 
     const names = ROUTE_NAMES[goal] || ROUTE_NAMES.general_fitness;
     const warnings: string[] = [];
     const highlights: string[] = [];
 
+    if (usedRoadRouting) highlights.push("Road-snapped pedestrian route");
     if (params.temperatureF && params.temperatureF > 90) warnings.push("High temperature - stay hydrated");
     if (segments.some((s) => !s.lightingAvailable)) warnings.push("Some segments lack lighting");
     if (segments.some((s) => s.trafficLevel === "high")) warnings.push("Route includes high-traffic segments");
@@ -474,11 +574,11 @@ export function generateRoutes(params: RouteParams) {
       ],
     };
 
-    routes.push({
+    return {
       id: generateId(),
       name: names[r % names.length],
       description: (descriptions[goal] || descriptions.general_fitness)[r % 3],
-      distanceMiles: Math.round(params.distanceMiles * 100) / 100,
+      distanceMiles: displayDistance,
       estimatedDurationMinutes: estimatedDuration,
       elevationGainFt: Math.round(totalElevationGain),
       elevationLossFt: Math.round(totalElevationLoss),
@@ -489,13 +589,14 @@ export function generateRoutes(params: RouteParams) {
       surfaceBreakdown,
       warnings,
       highlights,
-    });
-  }
+    };
+  });
 
-  routes.sort((a, b) => b.overallScore - a.overallScore);
+  const resolvedRoutes = await Promise.all(routePromises);
+  resolvedRoutes.sort((a, b) => b.overallScore - a.overallScore);
 
   return {
-    routes,
+    routes: resolvedRoutes,
     weatherSummary: getWeatherSummary(params),
     generatedAt: new Date().toISOString(),
   };

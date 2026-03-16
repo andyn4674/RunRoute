@@ -6,10 +6,10 @@ const router: IRouter = Router();
 
 const routeCache = new Map<string, any>();
 
-router.post("/routes/generate", (req, res) => {
+router.post("/routes/generate", async (req, res) => {
   try {
     const parsed = GenerateRoutesBody.parse(req.body);
-    const result = generateRoutes({
+    const result = await generateRoutes({
       trainingGoal: parsed.trainingGoal,
       distanceMiles: parsed.distanceMiles,
       startLat: parsed.startLat,
