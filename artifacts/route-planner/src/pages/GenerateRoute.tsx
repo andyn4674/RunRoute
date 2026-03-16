@@ -99,7 +99,7 @@ export default function GenerateRoute() {
         <div className="bg-card border border-border rounded-2xl p-6 shadow-xl">
           <h2 className="text-2xl font-display mb-6 border-b border-border pb-4">1. Training Objective</h2>
           
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6 sm:mb-8">
             {GOALS.map((goal) => {
               const isSelected = form.trainingGoal === goal.id;
               return (
@@ -107,14 +107,14 @@ export default function GenerateRoute() {
                   key={goal.id}
                   onClick={() => setForm(prev => ({ ...prev, trainingGoal: goal.id as any }))}
                   className={cn(
-                    "flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200 gap-2",
+                    "flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl border transition-all duration-200 gap-1.5 sm:gap-2 min-h-[64px]",
                     isSelected 
                       ? "bg-primary/20 border-primary text-primary shadow-[0_0_15px_rgba(255,69,0,0.15)]" 
                       : "bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground hover:border-muted-foreground"
                   )}
                 >
-                  <goal.icon className={cn("w-6 h-6", isSelected && "animate-pulse")} />
-                  <span className="text-xs font-bold uppercase tracking-wider">{goal.label}</span>
+                  <goal.icon className={cn("w-5 h-5 sm:w-6 sm:h-6", isSelected && "animate-pulse")} />
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">{goal.label}</span>
                 </button>
               );
             })}
@@ -164,14 +164,14 @@ export default function GenerateRoute() {
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-6 shadow-xl flex-1 flex flex-col min-h-[500px]">
-          <h2 className="text-2xl font-display mb-2 flex items-center gap-2">
-            <Navigation className="text-primary w-6 h-6" />
+        <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-xl flex-1 flex flex-col min-h-[400px] sm:min-h-[500px]">
+          <h2 className="text-xl sm:text-2xl font-display mb-2 flex items-center gap-2">
+            <Navigation className="text-primary w-5 h-5 sm:w-6 sm:h-6" />
             2. Start Location
           </h2>
-          <p className="text-sm text-muted-foreground mb-4">Click on the map to set your starting point.</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">Tap on the map to set your starting point.</p>
           
-          <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden border-2 border-border focus-within:border-primary transition-colors">
+          <div className="flex-1 min-h-[250px] sm:min-h-[300px] rounded-xl overflow-hidden border-2 border-border focus-within:border-primary transition-colors">
             <MapComponent 
               startLocation={form.startLat ? [form.startLat, form.startLng!] : null}
               onLocationSelect={(lat, lng) => setForm(prev => ({ ...prev, startLat: lat, startLng: lng }))}
@@ -184,10 +184,10 @@ export default function GenerateRoute() {
           <button 
             onClick={handleGenerate}
             disabled={generateMutation.isPending}
-            className="w-full mt-6 py-4 bg-primary text-primary-foreground font-display text-xl tracking-wider uppercase rounded-xl hover:bg-primary/90 transition-all hover:shadow-[0_0_20px_rgba(255,69,0,0.3)] disabled:opacity-50 flex justify-center items-center gap-3"
+            className="w-full mt-4 sm:mt-6 py-3.5 sm:py-4 bg-primary text-primary-foreground font-display text-lg sm:text-xl tracking-wider uppercase rounded-xl hover:bg-primary/90 transition-all hover:shadow-[0_0_20px_rgba(255,69,0,0.3)] disabled:opacity-50 flex justify-center items-center gap-3 min-h-[48px]"
           >
             {generateMutation.isPending ? (
-              <><Loader2 className="w-6 h-6 animate-spin" /> Analyzing Terrain...</>
+              <><Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" /> Analyzing Terrain...</>
             ) : (
               "Generate Routes"
             )}

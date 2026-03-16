@@ -219,7 +219,7 @@ export function RouteChat({ onApplyParams }: RouteChatProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed bottom-24 right-6 w-[400px] max-h-[600px] bg-card border border-border rounded-2xl shadow-2xl shadow-black/50 flex flex-col z-50 overflow-hidden"
+            className="fixed inset-0 md:inset-auto md:bottom-24 md:right-6 md:w-[400px] md:max-h-[600px] bg-card md:border md:border-border md:rounded-2xl shadow-2xl shadow-black/50 flex flex-col z-50 overflow-hidden"
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-gradient-to-r from-primary/10 to-transparent">
               <div className="flex items-center gap-3">
@@ -252,7 +252,7 @@ export function RouteChat({ onApplyParams }: RouteChatProps) {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px] max-h-[400px] custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 custom-scrollbar">
               {chatMessages.length === 0 && (
                 <div className="text-center py-8">
                   <Sparkles className="w-10 h-10 text-primary/40 mx-auto mb-4" />
@@ -396,23 +396,16 @@ export function RouteChat({ onApplyParams }: RouteChatProps) {
         )}
       </AnimatePresence>
 
-      <motion.button
-        onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          "fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-lg shadow-primary/30 flex items-center justify-center z-50 transition-colors",
-          isOpen
-            ? "bg-muted text-foreground hover:bg-muted/80"
-            : "bg-primary text-primary-foreground hover:bg-primary/90"
-        )}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-      >
-        {isOpen ? (
-          <X className="w-6 h-6" />
-        ) : (
+      {!isOpen && (
+        <motion.button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-20 md:bottom-6 right-4 md:right-6 w-14 h-14 rounded-full shadow-lg shadow-primary/30 flex items-center justify-center z-40 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
           <MessageSquare className="w-6 h-6" />
-        )}
-      </motion.button>
+        </motion.button>
+      )}
     </>
   );
 }

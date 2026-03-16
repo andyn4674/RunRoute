@@ -33,23 +33,23 @@ export default function RouteDetail() {
         <ArrowLeft className="w-4 h-4" /> Back to options
       </Link>
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 sm:gap-6">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <span className="px-3 py-1 bg-primary/20 text-primary border border-primary/30 rounded-full text-xs font-bold uppercase tracking-widest">
               SCORE: {route.overallScore}/100
             </span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-display uppercase tracking-wide text-foreground">{route.name}</h1>
+          <h1 className="text-2xl sm:text-4xl md:text-5xl font-display uppercase tracking-wide text-foreground">{route.name}</h1>
         </div>
-        <div className="flex gap-6 text-right">
+        <div className="flex gap-4 sm:gap-6 text-right">
           <div>
-            <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Distance</p>
-            <p className="text-3xl font-display">{route.distanceMiles} <span className="text-lg">mi</span></p>
+            <p className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-wider">Distance</p>
+            <p className="text-2xl sm:text-3xl font-display">{route.distanceMiles} <span className="text-base sm:text-lg">mi</span></p>
           </div>
           <div>
-            <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Est. Time</p>
-            <p className="text-3xl font-display">{route.estimatedDurationMinutes} <span className="text-lg">min</span></p>
+            <p className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-wider">Est. Time</p>
+            <p className="text-2xl sm:text-3xl font-display">{route.estimatedDurationMinutes} <span className="text-base sm:text-lg">min</span></p>
           </div>
         </div>
       </div>

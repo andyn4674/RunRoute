@@ -1,24 +1,21 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Map, User, History, Home, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { Activity, Map, User, History, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 const navItems = [
-  { path: "/", label: "Dashboard", icon: Home },
-  { path: "/generate", label: "Plan Route", icon: Map },
-  { path: "/history", label: "Run History", icon: History },
+  { path: "/", label: "Home", icon: Home },
+  { path: "/generate", label: "Plan", icon: Map },
+  { path: "/history", label: "History", icon: History },
   { path: "/profile", label: "Profile", icon: User },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background relative overflow-hidden">
-      {/* Background Texture */}
       <div 
         className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none mix-blend-screen"
         style={{
@@ -28,55 +25,6 @@ export function Layout({ children }: { children: ReactNode }) {
         }}
       />
 
-      {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-card/80 backdrop-blur-xl z-50 sticky top-0">
-        <Link href="/" className="flex items-center gap-2 text-primary">
-          <Activity className="w-8 h-8" />
-          <span className="font-display text-xl tracking-wider text-foreground">RunRoute</span>
-        </Link>
-        <button 
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="text-foreground p-2 hover:bg-muted rounded-lg transition-colors"
-        >
-          {mobileMenuOpen ? <X /> : <Menu />}
-        </button>
-      </div>
-
-      {/* Mobile Menu */}
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="md:hidden absolute top-[73px] left-0 right-0 bg-card border-b border-border z-40 shadow-2xl"
-          >
-            <nav className="flex flex-col p-4 gap-2">
-              {navItems.map((item) => {
-                const isActive = location === item.path || (item.path !== "/" && location.startsWith(item.path));
-                return (
-                  <Link 
-                    key={item.path} 
-                    href={item.path}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-semibold",
-                      isActive 
-                        ? "bg-primary/10 text-primary border border-primary/20" 
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    <item.icon className="w-5 h-5" />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-72 border-r border-border bg-card/50 backdrop-blur-xl z-40 shrink-0 sticky top-0 h-screen">
         <div className="p-8">
           <Link href="/" className="flex items-center gap-3 text-primary group">
@@ -108,7 +56,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   />
                 )}
                 <item.icon className={cn("w-6 h-6 transition-transform duration-300", isActive ? "scale-110" : "group-hover:scale-110")} />
-                {item.label}
+                {item.label === "Home" ? "Dashboard" : item.label === "Plan" ? "Plan Route" : item.label === "History" ? "Run History" : item.label}
               </Link>
             );
           })}
@@ -122,12 +70,39 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 relative z-10 w-full overflow-y-auto h-screen">
-        <div className="p-4 sm:p-8 lg:p-12 max-w-7xl mx-auto">
+      <main className="flex-1 relative z-10 w-full overflow-y-auto md:h-screen">
+        <div className="p-4 pb-24 md:pb-8 sm:p-8 lg:p-12 max-w-7xl mx-auto">
           {children}
         </div>
       </main>
+
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border safe-area-bottom">
+        <div className="flex items-stretch justify-around h-16">
+          {navItems.map((item) => {
+            const isActive = location === item.path || (item.path !== "/" && location.startsWith(item.path));
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 gap-0.5 relative transition-colors min-h-[48px]",
+                  isActive ? "text-primary" : "text-muted-foreground active:text-foreground"
+                )}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="mobileActiveTab"
+                    className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-primary rounded-full"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <item.icon className={cn("w-5 h-5", isActive && "scale-110")} />
+                <span className="text-[10px] font-bold uppercase tracking-wider">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

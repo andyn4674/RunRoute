@@ -40,14 +40,14 @@ export default function RunHistory() {
 
   return (
     <div className="space-y-8 pb-20 relative">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
         <div>
-          <h1 className="text-4xl font-display uppercase tracking-wide text-foreground">Run History</h1>
-          <p className="text-muted-foreground mt-2">Track your past efforts and analyze performance.</p>
+          <h1 className="text-2xl sm:text-4xl font-display uppercase tracking-wide text-foreground">Run History</h1>
+          <p className="text-muted-foreground mt-1 sm:mt-2 text-sm">Track your past efforts and analyze performance.</p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl flex items-center gap-2 hover:bg-primary/90 transition-all shadow-[0_0_15px_rgba(255,69,0,0.2)]"
+          className="w-full sm:w-auto px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-primary/90 transition-all shadow-[0_0_15px_rgba(255,69,0,0.2)] min-h-[48px]"
         >
           <Plus className="w-5 h-5" /> Log Manual Run
         </button>
@@ -110,9 +110,9 @@ export default function RunHistory() {
           >
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-card border border-border w-full max-w-lg rounded-3xl p-8 shadow-2xl relative"
+              className="bg-card border border-border w-full max-w-lg rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl relative mx-2"
             >
-              <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-muted-foreground hover:text-foreground">
+              <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 sm:top-6 sm:right-6 text-muted-foreground hover:text-foreground p-2 min-w-[44px] min-h-[44px] flex items-center justify-center">
                 <X className="w-6 h-6" />
               </button>
               <h2 className="text-2xl font-display mb-6">Log Manual Run</h2>

@@ -23,20 +23,20 @@ export default function Dashboard() {
           <div className="absolute inset-0 bg-gradient-to-r from-card via-card/80 to-transparent" />
         </div>
         
-        <div className="relative z-10 p-8 md:p-12 lg:p-16 flex flex-col items-start max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/20 text-primary border border-primary/30 mb-6 backdrop-blur-md">
-            <Flame className="w-4 h-4" />
-            <span className="text-sm font-bold tracking-widest uppercase">Ready to dominate</span>
+        <div className="relative z-10 p-6 sm:p-8 md:p-12 lg:p-16 flex flex-col items-start max-w-2xl">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-primary/20 text-primary border border-primary/30 mb-4 sm:mb-6 backdrop-blur-md">
+            <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="text-xs sm:text-sm font-bold tracking-widest uppercase">Ready to dominate</span>
           </div>
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-display text-white mb-6 leading-tight">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-display text-white mb-4 sm:mb-6 leading-tight">
             OWN YOUR <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">TRAINING.</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-lg leading-relaxed">
+          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-10 max-w-lg leading-relaxed">
             Generate personalized routes optimized for your current goals, local weather, and performance metrics.
           </p>
           <Link 
             href="/generate" 
-            className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 bg-primary text-primary-foreground rounded-xl font-bold text-lg overflow-hidden transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(255,69,0,0.4)]"
+            className="group relative inline-flex items-center justify-center gap-2 sm:gap-3 px-6 py-3 sm:px-8 sm:py-4 bg-primary text-primary-foreground rounded-xl font-bold text-base sm:text-lg overflow-hidden transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(255,69,0,0.4)] min-h-[48px]"
           >
             <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
             <Play className="w-5 h-5 fill-current" />
@@ -45,44 +45,44 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-3 sm:gap-6">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-card p-6 rounded-2xl border border-border shadow-lg hover:border-primary/50 transition-colors"
+          className="bg-card p-4 sm:p-6 rounded-2xl border border-border shadow-lg hover:border-primary/50 transition-colors"
         >
-          <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4 text-primary">
-            <TrendingUp className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-3 sm:mb-4 text-primary">
+            <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <h3 className="text-3xl font-display mb-1">{profileLoading ? "..." : profile?.totalMilesRun || 0}</h3>
-          <p className="text-muted-foreground font-medium uppercase tracking-wider text-sm">Total Miles</p>
+          <h3 className="text-xl sm:text-3xl font-display mb-1">{profileLoading ? "..." : profile?.totalMilesRun || 0}</h3>
+          <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px] sm:text-sm">Total Miles</p>
         </motion.div>
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-card p-6 rounded-2xl border border-border shadow-lg hover:border-secondary/50 transition-colors"
+          className="bg-card p-4 sm:p-6 rounded-2xl border border-border shadow-lg hover:border-secondary/50 transition-colors"
         >
-          <div className="w-12 h-12 bg-secondary/10 rounded-xl flex items-center justify-center mb-4 text-secondary">
-            <Target className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-secondary/10 rounded-xl flex items-center justify-center mb-3 sm:mb-4 text-secondary">
+            <Target className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <h3 className="text-3xl font-display mb-1">{profileLoading ? "..." : profile?.totalRunsLogged || 0}</h3>
-          <p className="text-muted-foreground font-medium uppercase tracking-wider text-sm">Completed Runs</p>
+          <h3 className="text-xl sm:text-3xl font-display mb-1">{profileLoading ? "..." : profile?.totalRunsLogged || 0}</h3>
+          <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px] sm:text-sm">Runs</p>
         </motion.div>
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-card p-6 rounded-2xl border border-border shadow-lg hover:border-accent/50 transition-colors"
+          className="bg-card p-4 sm:p-6 rounded-2xl border border-border shadow-lg hover:border-accent/50 transition-colors"
         >
-          <div className="w-12 h-12 bg-accent/50 rounded-xl flex items-center justify-center mb-4 text-accent-foreground">
-            <MapPin className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-accent/50 rounded-xl flex items-center justify-center mb-3 sm:mb-4 text-accent-foreground">
+            <MapPin className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <h3 className="text-3xl font-display mb-1">{profileLoading ? "..." : profile?.averagePaceMinsPerMile || '0.0'}</h3>
-          <p className="text-muted-foreground font-medium uppercase tracking-wider text-sm">Avg Pace (min/mi)</p>
+          <h3 className="text-xl sm:text-3xl font-display mb-1">{profileLoading ? "..." : profile?.averagePaceMinsPerMile || '0.0'}</h3>
+          <p className="text-muted-foreground font-medium uppercase tracking-wider text-[10px] sm:text-sm">Pace</p>
         </motion.div>
       </div>
 
