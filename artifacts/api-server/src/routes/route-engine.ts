@@ -384,52 +384,149 @@ const ROUTE_NAMES: Record<string, string[]> = {
   general_fitness: ["Balanced Fitness Loop", "Mixed Terrain Circuit", "Active Explorer Trail"],
 };
 
-async function fetchLiveWeather(lat: number, lng: number): Promise<{
+interface HourlyWeatherPoint {
+  time: string;
   temperatureF: number;
   humidity: number;
   windSpeedMph: number;
   uvIndex: number;
+  weatherCode: number;
   conditions: string;
   precipitationMm: number;
-}> {
+}
+
+interface WeatherForecast {
+  current: HourlyWeatherPoint;
+  hourly: HourlyWeatherPoint[];
+}
+
+function weatherCodeToConditions(weatherCode: number): string {
+  if (weatherCode >= 95) return "Thunderstorm";
+  if (weatherCode >= 80) return "Rain Showers";
+  if (weatherCode >= 71) return "Snow";
+  if (weatherCode >= 61) return "Rain";
+  if (weatherCode >= 51) return "Drizzle";
+  if (weatherCode >= 45) return "Foggy";
+  if (weatherCode >= 3) return "Overcast";
+  if (weatherCode >= 2) return "Partly Cloudy";
+  if (weatherCode >= 1) return "Mainly Clear";
+  return "Clear";
+}
+
+async function fetchWeatherForecast(lat: number, lng: number): Promise<WeatherForecast> {
+  const defaultPoint: HourlyWeatherPoint = {
+    time: new Date().toISOString(),
+    temperatureF: 72, humidity: 50, windSpeedMph: 5, uvIndex: 5,
+    weatherCode: 0, conditions: "Clear", precipitationMm: 0,
+  };
+
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,uv_index,weather_code,precipitation&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,uv_index,weather_code,precipitation&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,uv_index,weather_code,precipitation&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_hours=6`;
     const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error("Weather API failed");
     const data = await response.json();
-    const current = data.current;
+    const c = data.current;
 
-    const weatherCode = current.weather_code ?? 0;
-    let conditions = "Clear";
-    if (weatherCode >= 95) conditions = "Thunderstorm";
-    else if (weatherCode >= 80) conditions = "Rain Showers";
-    else if (weatherCode >= 71) conditions = "Snow";
-    else if (weatherCode >= 61) conditions = "Rain";
-    else if (weatherCode >= 51) conditions = "Drizzle";
-    else if (weatherCode >= 45) conditions = "Foggy";
-    else if (weatherCode >= 3) conditions = "Overcast";
-    else if (weatherCode >= 2) conditions = "Partly Cloudy";
-    else if (weatherCode >= 1) conditions = "Mainly Clear";
-
-    return {
-      temperatureF: Math.round(current.temperature_2m ?? 72),
-      humidity: Math.round(current.relative_humidity_2m ?? 50),
-      windSpeedMph: Math.round(current.wind_speed_10m ?? 5),
-      uvIndex: Math.round(current.uv_index ?? 5),
-      conditions,
-      precipitationMm: current.precipitation ?? 0,
+    const currentCode = c.weather_code ?? 0;
+    const current: HourlyWeatherPoint = {
+      time: c.time ?? new Date().toISOString(),
+      temperatureF: Math.round(c.temperature_2m ?? 72),
+      humidity: Math.round(c.relative_humidity_2m ?? 50),
+      windSpeedMph: Math.round(c.wind_speed_10m ?? 5),
+      uvIndex: Math.round(c.uv_index ?? 5),
+      weatherCode: currentCode,
+      conditions: weatherCodeToConditions(currentCode),
+      precipitationMm: c.precipitation ?? 0,
     };
+
+    const hourly: HourlyWeatherPoint[] = [];
+    const h = data.hourly;
+    if (h?.time && Array.isArray(h.time)) {
+      for (let i = 0; i < h.time.length; i++) {
+        const code = h.weather_code?.[i] ?? 0;
+        hourly.push({
+          time: h.time[i],
+          temperatureF: Math.round(h.temperature_2m?.[i] ?? 72),
+          humidity: Math.round(h.relative_humidity_2m?.[i] ?? 50),
+          windSpeedMph: Math.round(h.wind_speed_10m?.[i] ?? 5),
+          uvIndex: Math.round(h.uv_index?.[i] ?? 5),
+          weatherCode: code,
+          conditions: weatherCodeToConditions(code),
+          precipitationMm: h.precipitation?.[i] ?? 0,
+        });
+      }
+    }
+
+    return { current, hourly };
   } catch (err) {
-    console.warn("Failed to fetch live weather, using defaults:", err);
-    return {
-      temperatureF: 72,
-      humidity: 50,
-      windSpeedMph: 5,
-      uvIndex: 5,
-      conditions: "Clear",
-      precipitationMm: 0,
-    };
+    console.warn("Failed to fetch weather forecast, using defaults:", err);
+    return { current: defaultPoint, hourly: [defaultPoint] };
   }
+}
+
+function getWeatherForRunWindow(forecast: WeatherForecast, durationMinutes: number): {
+  start: HourlyWeatherPoint;
+  worst: HourlyWeatherPoint;
+  conditionsChange: string | null;
+  worstHour: number;
+  forecastLimited: boolean;
+} {
+  const hoursNeeded = Math.ceil(durationMinutes / 60);
+
+  const currentTime = new Date(forecast.current.time).getTime();
+  const relevantHours = forecast.hourly.filter(h => {
+    const t = new Date(h.time).getTime();
+    return t >= currentTime;
+  }).slice(0, Math.max(1, hoursNeeded + 1));
+
+  const forecastLimited = hoursNeeded > relevantHours.length;
+
+  if (relevantHours.length === 0) {
+    return { start: forecast.current, worst: forecast.current, conditionsChange: null, worstHour: 0, forecastLimited };
+  }
+
+  let worstIdx = 0;
+  let worstScore = -Infinity;
+
+  for (let i = 0; i < relevantHours.length; i++) {
+    const h = relevantHours[i];
+    let severity = 0;
+    severity += h.weatherCode * 0.5;
+    severity += Math.max(0, h.temperatureF - 85) * 2;
+    severity += Math.max(0, 32 - h.temperatureF) * 2;
+    severity += h.windSpeedMph * 0.5;
+    severity += h.precipitationMm * 10;
+    severity += Math.max(0, h.uvIndex - 6) * 3;
+
+    if (severity > worstScore) {
+      worstScore = severity;
+      worstIdx = i;
+    }
+  }
+
+  const start = forecast.current;
+  const worst = relevantHours[worstIdx];
+  let conditionsChange: string | null = null;
+
+  if (worstIdx > 0 && worst.conditions !== start.conditions) {
+    const changeTime = worstIdx === 1 ? "within the hour" : `in ~${worstIdx} hour${worstIdx > 1 ? "s" : ""}`;
+    conditionsChange = `${worst.conditions} expected ${changeTime}`;
+  }
+
+  if (worstIdx > 0) {
+    const tempDelta = worst.temperatureF - start.temperatureF;
+    if (Math.abs(tempDelta) >= 5 && !conditionsChange) {
+      const dir = tempDelta > 0 ? "rising" : "dropping";
+      conditionsChange = `Temperature ${dir} to ${worst.temperatureF}°F during your run`;
+    }
+
+    const windDelta = worst.windSpeedMph - start.windSpeedMph;
+    if (windDelta >= 8 && !conditionsChange) {
+      conditionsChange = `Winds increasing to ${worst.windSpeedMph} mph during your run`;
+    }
+  }
+
+  return { start, worst, conditionsChange, worstHour: worstIdx, forecastLimited };
 }
 
 interface LocalAdvisory {
@@ -527,37 +624,46 @@ Return [] if no significant advisories. Be realistic — don't fabricate events,
   }
 }
 
-function getWeatherSummary(weather: {
-  temperatureF: number;
-  humidity: number;
-  windSpeedMph: number;
-  uvIndex: number;
-  conditions: string;
-  precipitationMm: number;
-}) {
-  const temp = weather.temperatureF;
-  const humidity = weather.humidity;
-  const wind = weather.windSpeedMph;
-  const uv = weather.uvIndex;
+function getWeatherSummary(
+  current: HourlyWeatherPoint,
+  conditionsChange: string | null,
+  worstDuring: HourlyWeatherPoint | null,
+) {
+  const temp = current.temperatureF;
+  const humidity = current.humidity;
+  const wind = current.windSpeedMph;
+  const uv = current.uvIndex;
 
   const heatIndex = temp + 0.5 * (temp - 61 + (temp - 68) * 0.012 * humidity);
 
   let recommendation = "Good conditions for running.";
-  if (weather.precipitationMm > 5) recommendation = "Active precipitation — consider waterproof gear or rescheduling.";
+  if (current.precipitationMm > 5) recommendation = "Active precipitation — consider waterproof gear or rescheduling.";
   else if (heatIndex > 105) recommendation = "Extreme heat — consider postponing or reducing intensity.";
   else if (heatIndex > 90) recommendation = "High heat index — stay hydrated and take breaks.";
   else if (temp < 32) recommendation = "Below freezing — wear layers and watch for ice.";
   else if (wind > 20) recommendation = "Strong winds — choose sheltered routes.";
   else if (uv > 8) recommendation = "Very high UV — apply sunscreen and seek shade.";
-  else if (weather.conditions === "Rain" || weather.conditions === "Drizzle") recommendation = "Light rain expected — wear moisture-wicking layers.";
+  else if (current.conditions === "Rain" || current.conditions === "Drizzle") recommendation = "Light rain expected — wear moisture-wicking layers.";
   else if (temp >= 60 && temp <= 75 && wind < 10) recommendation = "Ideal running conditions — enjoy your run!";
+
+  if (conditionsChange) {
+    recommendation += ` Heads up: ${conditionsChange}.`;
+  }
+
+  if (worstDuring && worstDuring.conditions !== current.conditions) {
+    const worstDesc = worstDuring.conditions;
+    if (["Thunderstorm", "Rain", "Rain Showers", "Snow"].includes(worstDesc) &&
+        !["Thunderstorm", "Rain", "Rain Showers", "Snow"].includes(current.conditions)) {
+      recommendation += ` ${worstDesc} may develop during your run — plan accordingly.`;
+    }
+  }
 
   return {
     temperatureF: temp,
     humidity,
     windSpeedMph: wind,
     uvIndex: uv,
-    conditions: weather.conditions,
+    conditions: current.conditions,
     heatIndex: Math.round(heatIndex),
     recommendation,
   };
@@ -567,11 +673,12 @@ export async function generateRoutes(params: RouteParams) {
   const goal = params.trainingGoal;
   const numRoutes = 3;
 
-  const [liveWeather, advisories] = await Promise.all([
-    fetchLiveWeather(params.startLat, params.startLng),
+  const [forecast, advisories] = await Promise.all([
+    fetchWeatherForecast(params.startLat, params.startLng),
     fetchLocalAdvisories(params.startLat, params.startLng, params.timeOfDay),
   ]);
 
+  const liveWeather = forecast.current;
   const effectiveTemp = params.temperatureF ?? liveWeather.temperatureF;
   const effectiveHumidity = params.humidity ?? liveWeather.humidity;
   const effectiveWind = params.windSpeedMph ?? liveWeather.windSpeedMph;
@@ -662,7 +769,24 @@ export async function generateRoutes(params: RouteParams) {
       effectiveTemp
     );
 
-    const overallScore = Math.round(
+    const avgPace = goal === "speed_workout" ? 7 + Math.random() * 2 : goal === "recovery" ? 10 + Math.random() * 2 : 8.5 + Math.random() * 2;
+    const estimatedDuration = Math.round(displayDistance * avgPace);
+
+    const runWindow = getWeatherForRunWindow(forecast, estimatedDuration);
+    const worstWeather = runWindow.worst;
+
+    let forecastPenalty = 0;
+    if (worstWeather.conditions === "Thunderstorm") forecastPenalty += 30;
+    else if (worstWeather.conditions === "Rain" || worstWeather.conditions === "Rain Showers") forecastPenalty += 10;
+    else if (worstWeather.conditions === "Snow") forecastPenalty += 15;
+    if (worstWeather.temperatureF > 100) forecastPenalty += 15;
+    else if (worstWeather.temperatureF > 90) forecastPenalty += 8;
+    if (worstWeather.temperatureF < 20) forecastPenalty += 12;
+    if (worstWeather.windSpeedMph > 30) forecastPenalty += 12;
+    else if (worstWeather.windSpeedMph > 20) forecastPenalty += 6;
+    if (worstWeather.precipitationMm > 5) forecastPenalty += 10;
+
+    const baseScore = Math.round(
       (scoreBreakdown.terrainMatch * 0.25 +
         scoreBreakdown.safetyScore * 0.20 +
         scoreBreakdown.environmentalFit * 0.15 +
@@ -671,21 +795,47 @@ export async function generateRoutes(params: RouteParams) {
         scoreBreakdown.trafficScore * 0.10)
     );
 
-    const avgPace = goal === "speed_workout" ? 7 + Math.random() * 2 : goal === "recovery" ? 10 + Math.random() * 2 : 8.5 + Math.random() * 2;
-    const estimatedDuration = Math.round(displayDistance * avgPace);
+    const overallScore = Math.max(0, Math.min(100, baseScore - forecastPenalty));
 
     const names = ROUTE_NAMES[goal] || ROUTE_NAMES.general_fitness;
     const warnings: string[] = [];
     const highlights: string[] = [];
 
+    const worstTemp = worstWeather.temperatureF;
+    const worstWind = worstWeather.windSpeedMph;
+    const worstPrecip = worstWeather.precipitationMm;
+    const conditionsDuringRun = runWindow.conditionsChange;
+
     if (usedRoadRouting) highlights.push("Road-snapped pedestrian route");
-    if (effectiveTemp > 90) warnings.push("High temperature — stay hydrated");
-    if (effectiveTemp < 32) warnings.push("Below freezing — watch for ice");
-    if (effectiveWind > 15) warnings.push(`Strong winds (${effectiveWind} mph) — expect resistance`);
+
+    if (effectiveTemp > 90) warnings.push("High temperature at start — stay hydrated");
+    if (effectiveTemp < 32) warnings.push("Below freezing at start — watch for ice");
+    if (effectiveWind > 15) warnings.push(`Strong winds at start (${effectiveWind} mph) — expect resistance`);
     if (effectiveUV > 8) warnings.push("Very high UV index — wear sunscreen");
     if (liveWeather.precipitationMm > 0) warnings.push("Active precipitation — surfaces may be slippery");
     if (segments.some((s) => !s.lightingAvailable)) warnings.push("Some segments lack lighting");
     if (segments.some((s) => s.trafficLevel === "high")) warnings.push("Route includes high-traffic segments");
+
+    if (conditionsDuringRun) {
+      warnings.push(`Changing conditions: ${conditionsDuringRun}`);
+    }
+
+    if (runWindow.forecastLimited) {
+      warnings.push(`Forecast only covers first ${forecast.hourly.length}h of your run — later conditions are unknown`);
+    }
+
+    if (worstTemp > effectiveTemp + 3 && worstTemp > 90) {
+      warnings.push(`Temperature rising to ${worstTemp}°F during your run — plan hydration accordingly`);
+    }
+    if (worstTemp < effectiveTemp - 3 && worstTemp < 32) {
+      warnings.push(`Temperature dropping to ${worstTemp}°F during your run — bring extra layers`);
+    }
+    if (worstWind > effectiveWind + 5 && worstWind > 15) {
+      warnings.push(`Winds increasing to ${worstWind} mph mid-run — expect stronger resistance later`);
+    }
+    if (worstPrecip > 0 && liveWeather.precipitationMm === 0) {
+      warnings.push(`Precipitation expected during your run (${worstWeather.conditions}) — pack a layer`);
+    }
 
     const routeAdvisories = advisories.filter(() => {
       return Math.random() < 0.4 + r * 0.25;
@@ -703,22 +853,43 @@ export async function generateRoutes(params: RouteParams) {
 
     let notRecommended = false;
     let notRecommendedReason: string | undefined;
+    let demotedByForecast = false;
 
     if (liveWeather.conditions === "Thunderstorm") {
       notRecommended = true;
       notRecommendedReason = "Active thunderstorm in the area";
-    } else if (effectiveTemp > 105) {
+    } else if (worstWeather.conditions === "Thunderstorm" && liveWeather.conditions !== "Thunderstorm") {
       notRecommended = true;
-      notRecommendedReason = "Dangerously high temperature";
-    } else if (effectiveTemp < 10) {
+      notRecommendedReason = "Thunderstorm expected during your run";
+      demotedByForecast = true;
+    } else if (effectiveTemp > 105 || worstTemp > 105) {
       notRecommended = true;
-      notRecommendedReason = "Extreme cold — risk of frostbite";
-    } else if (effectiveWind > 35) {
+      notRecommendedReason = worstTemp > effectiveTemp
+        ? `Temperature rising to dangerous ${worstTemp}°F during your run`
+        : "Dangerously high temperature";
+      if (worstTemp > effectiveTemp) demotedByForecast = true;
+    } else if (effectiveTemp < 10 || worstTemp < 10) {
       notRecommended = true;
-      notRecommendedReason = "Dangerous wind speeds";
-    } else if (liveWeather.precipitationMm > 10) {
+      notRecommendedReason = worstTemp < effectiveTemp
+        ? `Temperature dropping to ${worstTemp}°F during your run — frostbite risk`
+        : "Extreme cold — risk of frostbite";
+      if (worstTemp < effectiveTemp) demotedByForecast = true;
+    } else if (effectiveWind > 35 || worstWind > 35) {
       notRecommended = true;
-      notRecommendedReason = "Heavy precipitation — poor visibility and slippery surfaces";
+      notRecommendedReason = worstWind > effectiveWind
+        ? `Winds intensifying to dangerous ${worstWind} mph during your run`
+        : "Dangerous wind speeds";
+      if (worstWind > effectiveWind) demotedByForecast = true;
+    } else if (liveWeather.precipitationMm > 10 || worstPrecip > 10) {
+      notRecommended = true;
+      notRecommendedReason = worstPrecip > liveWeather.precipitationMm
+        ? `Heavy precipitation (${worstWeather.conditions}) expected during your run`
+        : "Heavy precipitation — poor visibility and slippery surfaces";
+      if (worstPrecip > liveWeather.precipitationMm) demotedByForecast = true;
+    }
+
+    if (demotedByForecast) {
+      warnings.push("⚠️ This route was ranked lower due to worsening conditions during the run");
     }
 
     const highSeverityAdvisories = routeAdvisories.filter(a => a.severity === "high");
@@ -788,7 +959,14 @@ export async function generateRoutes(params: RouteParams) {
   const resolvedRoutes = await Promise.all(routePromises);
   resolvedRoutes.sort((a, b) => b.overallScore - a.overallScore);
 
-  const weatherSummary = getWeatherSummary(liveWeather);
+  const avgDuration = resolvedRoutes.reduce((s, r) => s + r.estimatedDurationMinutes, 0) / resolvedRoutes.length;
+  const overallRunWindow = getWeatherForRunWindow(forecast, avgDuration);
+
+  const weatherSummary = getWeatherSummary(
+    forecast.current,
+    overallRunWindow.conditionsChange,
+    overallRunWindow.worst,
+  );
 
   if (advisories.length > 0) {
     const advisorySummary = advisories.map(a => `${a.title} (${a.area})`).join(", ");
