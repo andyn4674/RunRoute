@@ -321,18 +321,111 @@ export default function GenerateRoute() {
         <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-xl">
           <h2 className="text-xl sm:text-2xl font-display mb-2 flex items-center gap-2">
             <Navigation className="text-primary w-5 h-5 sm:w-6 sm:h-6" />
-            2. Start Location
+            2. Start Location & Stops
           </h2>
-          <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">Tap on the map to set your starting point.</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
+            {addingStop ? "Tap the map to place a stop." : "Tap the map to set your starting point."}
+          </p>
           
-          <div className="h-[300px] sm:h-[350px] lg:h-[400px] rounded-xl overflow-hidden border-2 border-border focus-within:border-primary transition-colors">
+          <div className={cn(
+            "h-[300px] sm:h-[350px] lg:h-[400px] rounded-xl overflow-hidden border-2 transition-colors",
+            addingStop ? "border-primary ring-1 ring-primary" : "border-border focus-within:border-primary"
+          )}>
             <MapComponent 
               startLocation={form.startLat ? [form.startLat, form.startLng!] : null}
-              onLocationSelect={(lat, lng) => setForm(prev => ({ ...prev, startLat: lat, startLng: lng }))}
+              onLocationSelect={(lat, lng) => {
+                if (!addingStop) {
+                  setForm(prev => ({ ...prev, startLat: lat, startLng: lng }));
+                }
+              }}
               routes={result?.routes}
               selectedRouteId={selectedRouteId || undefined}
               className="h-full w-full"
+              stops={stops}
+              addingStop={addingStop}
+              onStopAdd={(lat, lng) => {
+                setStops(prev => [...prev, { lat, lng }]);
+                setAddingStop(false);
+              }}
             />
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <MapPin className="w-4 h-4" /> Stops ({stops.length})
+              </span>
+              <button
+                onClick={() => setAddingStop(!addingStop)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5",
+                  addingStop
+                    ? "bg-primary text-primary-foreground shadow-md"
+                    : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
+                )}
+              >
+                {addingStop ? (
+                  <><X className="w-3 h-3" /> Cancel</>
+                ) : (
+                  <><Plus className="w-3 h-3" /> Add Stop</>
+                )}
+              </button>
+            </div>
+
+            {stops.length > 0 && (
+              <div className="space-y-2">
+                {stops.map((stop, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2 border border-border">
+                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold shrink-0">
+                      {idx + 1}
+                    </div>
+                    {editingStopName === idx ? (
+                      <input
+                        autoFocus
+                        className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm text-foreground outline-none focus:border-primary"
+                        defaultValue={stop.name || ""}
+                        placeholder="Stop name..."
+                        onBlur={(e) => {
+                          const name = e.target.value.trim();
+                          setStops(prev => prev.map((s, i) => i === idx ? { ...s, name: name || undefined } : s));
+                          setEditingStopName(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                        }}
+                      />
+                    ) : (
+                      <span
+                        className="flex-1 text-sm text-foreground cursor-pointer hover:text-primary transition-colors truncate"
+                        onClick={() => setEditingStopName(idx)}
+                      >
+                        {stop.name || `Stop ${idx + 1}`}
+                        <span className="text-xs text-muted-foreground ml-2">
+                          ({stop.lat.toFixed(4)}, {stop.lng.toFixed(4)})
+                        </span>
+                      </span>
+                    )}
+                    <button
+                      onClick={() => setStops(prev => prev.filter((_, i) => i !== idx))}
+                      className="p-1 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      title="Remove stop"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setStops([])}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold uppercase tracking-wider"
+                >
+                  Clear all stops
+                </button>
+              </div>
+            )}
+
+            {stops.length === 0 && !addingStop && (
+              <p className="text-xs text-muted-foreground italic">No stops added. Add stops to route through specific locations like landmarks or parks.</p>
+            )}
           </div>
 
           <button 
