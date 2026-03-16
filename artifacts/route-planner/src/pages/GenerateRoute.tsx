@@ -30,7 +30,8 @@ export default function GenerateRoute() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const generateMutation = useGenerateRoutes();
-  const { form, setForm, result, setResult, selectedRouteId, setSelectedRouteId, clearRoutes } = useRouteStore();
+  const loadMoreMutation = useGenerateRoutes();
+  const { form, setForm, result, setResult, appendRoutes, selectedRouteId, setSelectedRouteId, clearRoutes } = useRouteStore();
   const [stops, setStops] = useState<Stop[]>([]);
   const [addingStop, setAddingStop] = useState(false);
   const [editingStopName, setEditingStopName] = useState<number | null>(null);
@@ -106,6 +107,80 @@ export default function GenerateRoute() {
       }
     );
   };
+
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const handleLoadMore = () => {
+    if (!form.startLat || !form.startLng) return;
+
+    const requestData = {
+      ...form,
+      ...(stops.length > 0 ? { stops } : {}),
+    } as RouteRequest;
+
+    setLoadingMore(true);
+    loadMoreMutation.mutate(
+      { data: requestData },
+      {
+        onSuccess: (data) => {
+          appendRoutes(data);
+          toast({ title: "More routes loaded!", description: `Added ${data.routes.length} new options.` });
+          setLoadingMore(false);
+        },
+        onError: (err: any) => {
+          toast({ title: "Failed to load more", description: err.message || "Something went wrong.", variant: "destructive" });
+          setLoadingMore(false);
+        }
+      }
+    );
+  };
+
+  const handleChatGenerate = useCallback((params: Record<string, any>) => {
+    const merged = { ...form };
+    const validGoals = ["mountain_hiking", "heat_tolerance", "recovery", "speed_workout", "endurance", "general_fitness"];
+    if (params.trainingGoal && validGoals.includes(params.trainingGoal)) {
+      merged.trainingGoal = params.trainingGoal as any;
+    }
+    if (typeof params.distanceMinMiles === "number") merged.distanceMinMiles = params.distanceMinMiles;
+    if (typeof params.distanceMaxMiles === "number") merged.distanceMaxMiles = params.distanceMaxMiles;
+    if (typeof params.distanceMiles === "number") {
+      merged.distanceMinMiles = Math.max(0.5, params.distanceMiles * 0.8);
+      merged.distanceMaxMiles = Math.min(26.2, params.distanceMiles * 1.2);
+    }
+    if (params.timeOfDay) merged.timeOfDay = params.timeOfDay as any;
+    if (typeof params.preferShade === "boolean") merged.preferShade = params.preferShade;
+    if (typeof params.avoidTraffic === "boolean") merged.avoidTraffic = params.avoidTraffic;
+    if (typeof params.preferTrails === "boolean") merged.preferTrails = params.preferTrails;
+    if (params.routeType) merged.routeType = params.routeType as any;
+
+    if (!merged.startLat || !merged.startLng) {
+      toast({ title: "Set a start location first", description: "Tap the map to set your starting point before generating.", variant: "destructive" });
+      return;
+    }
+
+    setForm(() => merged);
+
+    const requestData = {
+      ...merged,
+      ...(stops.length > 0 ? { stops } : {}),
+    } as RouteRequest;
+
+    generateMutation.mutate(
+      { data: requestData },
+      {
+        onSuccess: (data) => {
+          setResult(data);
+          if (data.routes.length > 0) {
+            setSelectedRouteId(data.routes[0].id);
+          }
+          toast({ title: "Routes generated from chat!", description: `Found ${data.routes.length} route options.` });
+        },
+        onError: (err: any) => {
+          toast({ title: "Generation failed", description: err.message || "Something went wrong.", variant: "destructive" });
+        }
+      }
+    );
+  }, [form, stops, generateMutation, setForm, setResult, setSelectedRouteId, toast]);
 
   const handleStartRun = (routeId: string) => {
     clearRoutes();
@@ -406,12 +481,24 @@ export default function GenerateRoute() {
                   </div>
                 );
               })}
+
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore || loadMoreMutation.isPending}
+                className="w-full py-3.5 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-colors uppercase tracking-wider text-sm flex justify-center items-center gap-3 min-h-[48px] border border-border disabled:opacity-50"
+              >
+                {loadingMore ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Loading More...</>
+                ) : (
+                  <><Plus className="w-4 h-4" /> Load More Routes</>
+                )}
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      <RouteChat onApplyParams={handleApplyParams} />
+      <RouteChat onApplyParams={handleApplyParams} onGenerateRoute={handleChatGenerate} />
     </div>
   );
 }

@@ -7,6 +7,7 @@ interface RouteState {
   selectedRouteId: string | null;
   setForm: (updater: (prev: Partial<RouteRequest>) => Partial<RouteRequest>) => void;
   setResult: (result: RouteResponse | null) => void;
+  appendRoutes: (newResult: RouteResponse) => void;
   setSelectedRouteId: (id: string | null) => void;
   clearRoutes: () => void;
 }
@@ -34,13 +35,23 @@ export function RouteProvider({ children }: { children: ReactNode }) {
     setFormState(updater);
   }, []);
 
+  const appendRoutes = useCallback((newResult: RouteResponse) => {
+    setResult(prev => {
+      if (!prev) return newResult;
+      return {
+        ...prev,
+        routes: [...prev.routes, ...newResult.routes],
+      };
+    });
+  }, []);
+
   const clearRoutes = useCallback(() => {
     setResult(null);
     setSelectedRouteId(null);
   }, []);
 
   return (
-    <RouteContext.Provider value={{ form, result, selectedRouteId, setForm, setResult, setSelectedRouteId, clearRoutes }}>
+    <RouteContext.Provider value={{ form, result, selectedRouteId, setForm, setResult, appendRoutes, setSelectedRouteId, clearRoutes }}>
       {children}
     </RouteContext.Provider>
   );

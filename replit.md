@@ -108,6 +108,8 @@ Located in `artifacts/api-server/src/routes/route-engine.ts`. Uses:
 - Post-OSRM distance trimming: if OSRM returns route >15% over target, route geometry is trimmed to target distance
 - Loop closure is OSRM-routed (snapClosureAndFitDistance): after trimming, the return-to-start segment is routed through OSRM to follow roads; if total distance overshoots >15%, outbound is re-trimmed to fit within budget
 - Stops/waypoints support: routes can include user-specified stops (lat/lng/name) that are routed through as OSRM intermediate waypoints; stop markers are resolved to nearest polyline point with deduplication
+- 5 route options per generation; "Load More Routes" button appends additional batches via separate mutation
+- AI chat can generate routes directly using `<generate_route>` tags (auto-triggers generation); also supports `<route_params>` for settings-only suggestions
 - Loop routes use compensated radius (0.55 factor); one-way routes use straight-line factor (0.82)
 - Falls back to raw via-points if OSRM is unavailable (10s timeout)
 - Live weather via Open-Meteo API (api.open-meteo.com) — no API key needed

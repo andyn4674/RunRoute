@@ -26,11 +26,12 @@ interface RouteParams {
 
 interface RouteChatProps {
   onApplyParams: (params: RouteParams) => void;
+  onGenerateRoute?: (params: RouteParams) => void;
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
-export function RouteChat({ onApplyParams }: RouteChatProps) {
+export function RouteChat({ onApplyParams, onGenerateRoute }: RouteChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
@@ -76,8 +77,21 @@ export function RouteChat({ onApplyParams }: RouteChatProps) {
     }
   };
 
+  const extractGenerateRoute = (text: string): RouteParams | null => {
+    const match = text.match(/<generate_route>([\s\S]*?)<\/generate_route>/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[1]);
+    } catch {
+      return null;
+    }
+  };
+
   const formatDisplayContent = (text: string): string => {
-    return text.replace(/<route_params>[\s\S]*?<\/route_params>/g, "").trim();
+    return text
+      .replace(/<route_params>[\s\S]*?<\/route_params>/g, "")
+      .replace(/<generate_route>[\s\S]*?<\/generate_route>/g, "")
+      .trim();
   };
 
   const sendMessage = async () => {
@@ -159,9 +173,14 @@ export function RouteChat({ onApplyParams }: RouteChatProps) {
         }
       }
 
-      const params = extractRouteParams(fullText);
-      if (params) {
-        setPendingParams(params);
+      const generateParams = extractGenerateRoute(fullText);
+      if (generateParams && onGenerateRoute) {
+        onGenerateRoute(generateParams);
+      } else {
+        const params = extractRouteParams(fullText);
+        if (params) {
+          setPendingParams(params);
+        }
       }
     } catch (err: any) {
       setChatMessages((prev) =>
