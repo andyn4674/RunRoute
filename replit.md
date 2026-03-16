@@ -105,7 +105,9 @@ Located in `artifacts/api-server/src/routes/route-engine.ts`. Uses:
 - OSRM pedestrian routing API (router.project-osrm.org/route/v1/foot/) to snap routes to actual roads/sidewalks
 - Full OSRM geometry preserved (no downsampling) for clean road-following rendering
 - Generates via-points in a loop or one-way pattern, sends to OSRM for road-snapped geometry, decodes polyline response
-- Post-OSRM distance trimming: if OSRM returns route >15% over target, route geometry is trimmed to target distance (loop trimming reserves budget for closure segment back to start)
+- Post-OSRM distance trimming: if OSRM returns route >15% over target, route geometry is trimmed to target distance
+- Loop closure is OSRM-routed (snapClosureAndFitDistance): after trimming, the return-to-start segment is routed through OSRM to follow roads; if total distance overshoots >15%, outbound is re-trimmed to fit within budget
+- Stops/waypoints support: routes can include user-specified stops (lat/lng/name) that are routed through as OSRM intermediate waypoints; stop markers are resolved to nearest polyline point with deduplication
 - Loop routes use compensated radius (0.55 factor); one-way routes use straight-line factor (0.82)
 - Falls back to raw via-points if OSRM is unavailable (10s timeout)
 - Live weather via Open-Meteo API (api.open-meteo.com) — no API key needed

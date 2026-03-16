@@ -283,12 +283,47 @@ function trimRouteToDistance(
     trimmed.push(points[i]);
   }
 
+  return trimmed;
+}
+
+async function snapClosureAndFitDistance(
+  osrmPoints: Array<{ lat: number; lng: number }>,
+  start: { lat: number; lng: number },
+  targetKm: number,
+): Promise<Array<{ lat: number; lng: number }>> {
+  let trimmed = trimRouteToDistance(osrmPoints, targetKm, true);
+
   const last = trimmed[trimmed.length - 1];
-  if (Math.abs(last.lat - start.lat) > 0.0001 || Math.abs(last.lng - start.lng) > 0.0001) {
-    trimmed.push({ lat: start.lat, lng: start.lng });
+  if (Math.abs(last.lat - start.lat) < 0.0001 && Math.abs(last.lng - start.lng) < 0.0001) {
+    return trimmed;
   }
 
-  return trimmed;
+  const closureResult = await snapToRoads([last, start]);
+  if (!closureResult || closureResult.points.length < 2) {
+    trimmed.push(start);
+    return trimmed;
+  }
+
+  const closureKm = closureResult.distanceKm;
+  let outboundKm = 0;
+  for (let i = 1; i < trimmed.length; i++) {
+    outboundKm += haversineDistance(trimmed[i - 1].lat, trimmed[i - 1].lng, trimmed[i].lat, trimmed[i].lng);
+  }
+  const totalKm = outboundKm + closureKm;
+
+  if (totalKm > targetKm * 1.15) {
+    const outboundBudget = targetKm - closureKm;
+    if (outboundBudget > 0) {
+      trimmed = trimRouteToDistance(osrmPoints, outboundBudget, false);
+      const reLast = trimmed[trimmed.length - 1];
+      const reClosure = await snapToRoads([reLast, start]);
+      if (reClosure && reClosure.points.length > 1) {
+        return [...trimmed, ...reClosure.points.slice(1)];
+      }
+    }
+  }
+
+  return [...trimmed, ...closureResult.points.slice(1)];
 }
 
 function generateLoopViaPoints(
@@ -907,18 +942,24 @@ export async function generateRoutes(params: RouteParams) {
     const osrmResult = await snapToRoads(viaPoints);
     if (osrmResult && osrmResult.points.length > 2) {
       if (!hasStops && osrmResult.distanceKm > variantMaxKm) {
-        routePoints = trimRouteToDistance(osrmResult.points, variantMaxKm, !isOneWay);
+        if (!isOneWay) {
+          routePoints = await snapClosureAndFitDistance(osrmResult.points, { lat: params.startLat, lng: params.startLng }, variantMaxKm);
+        } else {
+          routePoints = trimRouteToDistance(osrmResult.points, variantMaxKm, false);
+        }
       } else {
         routePoints = osrmResult.points;
       }
       usedRoadRouting = true;
 
       if (hasStops && stopIndices.length > 0) {
+        const usedPointIndices = new Set<number>();
         for (let si = 0; si < stopIndices.length; si++) {
           const stopCoord = viaPoints[stopIndices[si]];
           let bestIdx = 0;
           let bestDist = Infinity;
           for (let pi = 0; pi < routePoints.length; pi++) {
+            if (usedPointIndices.has(pi)) continue;
             const d = haversineDistance(stopCoord.lat, stopCoord.lng, routePoints[pi].lat, routePoints[pi].lng);
             if (d < bestDist) {
               bestDist = d;
@@ -926,6 +967,7 @@ export async function generateRoutes(params: RouteParams) {
             }
           }
           resolvedStopPointIndices.push(bestIdx);
+          usedPointIndices.add(bestIdx);
         }
       }
     } else {
@@ -947,9 +989,11 @@ export async function generateRoutes(params: RouteParams) {
       }
 
       if (hasStops) {
-        const stopIdx = resolvedStopPointIndices.indexOf(i);
-        if (stopIdx !== -1) {
-          name = stopNames[stopIdx] || `Stop ${stopIdx + 1}`;
+        for (let si = 0; si < resolvedStopPointIndices.length; si++) {
+          if (resolvedStopPointIndices[si] === i) {
+            name = stopNames[si] || `Stop ${si + 1}`;
+            break;
+          }
         }
       }
 
