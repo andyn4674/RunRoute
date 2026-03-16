@@ -122,7 +122,7 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 React + Vite frontend for the running route planner.
 
-- Pages: Dashboard, GenerateRoute, RouteDetail, RunHistory, Profile
+- Pages: Dashboard, GenerateRoute, RouteDetail, RunTracker, RunHistory, Profile
 - Components: Layout (sidebar + bottom tab nav), MapComponent (Leaflet + GPS geolocation), ScoreRadar (Recharts), ElevationProfile (Recharts), RouteChat (AI chat panel)
 - Mobile-first responsive design: bottom tab navigation on mobile, sidebar on desktop (md+)
 - Touch targets: min 44-48px for all interactive elements

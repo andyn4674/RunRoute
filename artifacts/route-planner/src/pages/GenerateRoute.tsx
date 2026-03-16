@@ -1,12 +1,12 @@
 import { useState, useCallback } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapComponent } from "@/components/map/MapComponent";
 import { ScoreRadar } from "@/components/charts/ScoreRadar";
 import { RouteChat } from "@/components/chat/RouteChat";
 import { useGenerateRoutes } from "@workspace/api-client-react";
 import type { RouteRequest, RouteResponse, GeneratedRoute } from "@workspace/api-client-react";
-import { Mountain, Flame, Heart, Zap, Clock, Dumbbell, Navigation, Loader2, Info, Map } from "lucide-react";
+import { Mountain, Flame, Heart, Zap, Clock, Dumbbell, Navigation, Loader2, Info, Map, Play, Watch } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +21,9 @@ const GOALS = [
 
 export default function GenerateRoute() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const generateMutation = useGenerateRoutes();
+  const [selectedRouteForTracking, setSelectedRouteForTracking] = useState<GeneratedRoute | null>(null);
   
   const [form, setForm] = useState<Partial<RouteRequest>>({
     trainingGoal: "general_fitness" as any,
@@ -289,20 +291,36 @@ export default function GenerateRoute() {
                         <motion.div 
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: 'auto', opacity: 1 }}
-                          className="mt-6 pt-6 border-t border-border flex justify-end gap-4"
+                          className="mt-6 pt-6 border-t border-border"
                         >
-                          <Link 
-                            href={`/route/${route.id}`}
-                            className="px-6 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-colors uppercase tracking-wider text-sm"
-                          >
-                            Full Details
-                          </Link>
-                          <button 
-                            className="px-6 py-3 text-primary-foreground font-bold rounded-xl transition-colors uppercase tracking-wider text-sm shadow-lg hover:shadow-xl"
-                            style={{ backgroundColor: color }}
-                          >
-                            Send to Device
-                          </button>
+                          <div className="flex flex-col sm:flex-row justify-end gap-3">
+                            <Link 
+                              href={`/route/${route.id}`}
+                              className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-colors uppercase tracking-wider text-sm text-center min-h-[48px] flex items-center justify-center"
+                            >
+                              Full Details
+                            </Link>
+                            <button 
+                              className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-colors uppercase tracking-wider text-sm flex items-center justify-center gap-2 min-h-[48px]"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toast({ title: "Connect Device", description: "Pair a GPS watch or fitness tracker to sync this route." });
+                              }}
+                            >
+                              <Watch className="w-4 h-4" /> Connect Device
+                            </button>
+                            <button 
+                              className="px-6 py-3 text-primary-foreground font-bold rounded-xl transition-colors uppercase tracking-wider text-sm shadow-lg hover:shadow-xl flex items-center justify-center gap-2 min-h-[48px]"
+                              style={{ backgroundColor: color }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRouteForTracking(route);
+                                setLocation(`/track/${route.id}`);
+                              }}
+                            >
+                              <Play className="w-4 h-4 fill-current" /> Start Run
+                            </button>
+                          </div>
                         </motion.div>
                       )}
                     </div>

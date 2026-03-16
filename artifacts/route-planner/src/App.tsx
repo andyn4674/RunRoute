@@ -11,6 +11,7 @@ import GenerateRoute from "@/pages/GenerateRoute";
 import RouteDetail from "@/pages/RouteDetail";
 import RunHistory from "@/pages/RunHistory";
 import Profile from "@/pages/Profile";
+import RunTracker from "@/pages/RunTracker";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,6 +30,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/generate" component={GenerateRoute} />
         <Route path="/route/:id" component={RouteDetail} />
+        <Route path="/track/:id" component={RunTracker} />
         <Route path="/history" component={RunHistory} />
         <Route path="/profile" component={Profile} />
         <Route component={NotFound} />

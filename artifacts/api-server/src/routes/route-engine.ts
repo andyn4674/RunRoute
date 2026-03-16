@@ -184,11 +184,11 @@ async function snapToRoads(
   waypoints: Array<{ lat: number; lng: number }>,
 ): Promise<Array<{ lat: number; lng: number }> | null> {
   const coords = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(";");
-  const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=polyline&steps=false`;
+  const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=polyline&steps=false&continue_straight=true`;
 
   try {
     const response = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) return null;
@@ -213,12 +213,14 @@ function generateViaPoints(
   const perimeterKm = distanceKm;
   const radiusKm = perimeterKm / (2 * Math.PI);
 
-  const baseAngle = routeVariant * 120 + (Math.random() * 30 - 15);
+  const baseAngle = routeVariant * 120 + (Math.random() * 20 - 10);
   const points: Array<{ lat: number; lng: number }> = [];
 
-  for (let i = 0; i < numPoints; i++) {
-    const angle = baseAngle + (360 * i) / numPoints;
-    const r = radiusKm * (0.75 + Math.random() * 0.5);
+  const densePoints = Math.max(numPoints, 8);
+
+  for (let i = 0; i < densePoints; i++) {
+    const angle = baseAngle + (360 * i) / densePoints;
+    const r = radiusKm * (0.85 + Math.random() * 0.3);
     const [lat, lng] = destinationPoint(startLat, startLng, r, angle);
     points.push({ lat, lng });
   }
@@ -431,7 +433,7 @@ export async function generateRoutes(params: RouteParams) {
   const routes = [];
 
   const routePromises = Array.from({ length: numRoutes }, async (_, r) => {
-    const numViaPoints = 4 + Math.floor(Math.random() * 3);
+    const numViaPoints = 6 + Math.floor(Math.random() * 4);
     const viaPoints = generateViaPoints(
       params.startLat,
       params.startLng,
@@ -445,7 +447,7 @@ export async function generateRoutes(params: RouteParams) {
 
     const snappedPoints = await snapToRoads(viaPoints);
     if (snappedPoints && snappedPoints.length > 2) {
-      routePoints = downsamplePoints(snappedPoints, 30 + Math.floor(Math.random() * 20));
+      routePoints = downsamplePoints(snappedPoints, 60 + Math.floor(Math.random() * 40));
       usedRoadRouting = true;
     } else {
       routePoints = viaPoints;
