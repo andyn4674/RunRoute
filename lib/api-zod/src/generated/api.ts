@@ -110,6 +110,8 @@ export const generateRoutesBodyHumidityMax = 100;
 export const generateRoutesBodyUvIndexMin = 0;
 export const generateRoutesBodyUvIndexMax = 11;
 
+export const generateRoutesBodyRouteTypeDefault = `loop`;
+
 export const GenerateRoutesBody = zod.object({
   trainingGoal: zod.enum([
     "mountain_hiking",
@@ -141,6 +143,12 @@ export const GenerateRoutesBody = zod.object({
   preferShade: zod.boolean().optional(),
   avoidTraffic: zod.boolean().optional(),
   preferTrails: zod.boolean().optional(),
+  routeType: zod
+    .enum(["loop", "one_way"])
+    .default(generateRoutesBodyRouteTypeDefault)
+    .describe(
+      "'loop' generates a circular route returning to start. 'one_way' generates a point-to-point route where distance is one direction only.",
+    ),
 });
 
 export const generateRoutesResponseRoutesItemOverallScoreMin = 0;

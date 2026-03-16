@@ -13,6 +13,7 @@ interface RouteParams {
   preferShade?: boolean;
   avoidTraffic?: boolean;
   preferTrails?: boolean;
+  routeType?: "loop" | "one_way";
 }
 
 interface GoalWeightConfig {
@@ -182,9 +183,14 @@ function decodePolyline(encoded: string): Array<{ lat: number; lng: number }> {
   return points;
 }
 
+interface OsrmResult {
+  points: Array<{ lat: number; lng: number }>;
+  distanceKm: number;
+}
+
 async function snapToRoads(
   waypoints: Array<{ lat: number; lng: number }>,
-): Promise<Array<{ lat: number; lng: number }> | null> {
+): Promise<OsrmResult | null> {
   const coords = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(";");
   const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=polyline&steps=false`;
 
@@ -198,36 +204,141 @@ async function snapToRoads(
     const data = await response.json();
     if (data.code !== "Ok" || !data.routes?.[0]?.geometry) return null;
 
-    return decodePolyline(data.routes[0].geometry);
+    const points = decodePolyline(data.routes[0].geometry);
+    const distanceKm = (data.routes[0].distance ?? 0) / 1000;
+    return { points, distanceKm };
   } catch {
     return null;
   }
 }
 
-function generateViaPoints(
+function trimRouteToDistance(
+  points: Array<{ lat: number; lng: number }>,
+  targetKm: number,
+  isLoop: boolean,
+): Array<{ lat: number; lng: number }> {
+  if (points.length < 2) return points;
+  const start = points[0];
+
+  if (!isLoop) {
+    const trimmed: Array<{ lat: number; lng: number }> = [points[0]];
+    let accumulated = 0;
+
+    for (let i = 1; i < points.length; i++) {
+      const segKm = haversineDistance(
+        points[i - 1].lat, points[i - 1].lng,
+        points[i].lat, points[i].lng
+      );
+
+      if (accumulated + segKm > targetKm) {
+        const remaining = targetKm - accumulated;
+        const fraction = remaining / segKm;
+        const lat = points[i - 1].lat + (points[i].lat - points[i - 1].lat) * fraction;
+        const lng = points[i - 1].lng + (points[i].lng - points[i - 1].lng) * fraction;
+        trimmed.push({ lat, lng });
+        break;
+      }
+
+      accumulated += segKm;
+      trimmed.push(points[i]);
+    }
+
+    return trimmed;
+  }
+
+  const trimmed: Array<{ lat: number; lng: number }> = [start];
+  let accumulated = 0;
+
+  for (let i = 1; i < points.length; i++) {
+    const segKm = haversineDistance(
+      points[i - 1].lat, points[i - 1].lng,
+      points[i].lat, points[i].lng
+    );
+
+    const closureKm = haversineDistance(
+      points[i].lat, points[i].lng,
+      start.lat, start.lng
+    );
+
+    if (accumulated + segKm + closureKm > targetKm) {
+      const budgetLeft = targetKm - accumulated - closureKm;
+      if (budgetLeft > 0) {
+        const fraction = budgetLeft / segKm;
+        const lat = points[i - 1].lat + (points[i].lat - points[i - 1].lat) * fraction;
+        const lng = points[i - 1].lng + (points[i].lng - points[i - 1].lng) * fraction;
+        trimmed.push({ lat, lng });
+      }
+      break;
+    }
+
+    accumulated += segKm;
+    trimmed.push(points[i]);
+  }
+
+  const last = trimmed[trimmed.length - 1];
+  if (Math.abs(last.lat - start.lat) > 0.0001 || Math.abs(last.lng - start.lng) > 0.0001) {
+    trimmed.push({ lat: start.lat, lng: start.lng });
+  }
+
+  return trimmed;
+}
+
+function generateLoopViaPoints(
   startLat: number,
   startLng: number,
   distanceMiles: number,
-  numPoints: number,
+  _numPoints: number,
   routeVariant: number
 ): Array<{ lat: number; lng: number }> {
   const distanceKm = distanceMiles * 1.60934;
-  const perimeterKm = distanceKm;
-  const radiusKm = perimeterKm / (2 * Math.PI);
+
+  const targetRadiusKm = distanceKm / (2 * Math.PI);
+
+  const compensatedRadius = targetRadiusKm * 0.55;
 
   const baseAngle = routeVariant * 120 + (Math.random() * 20 - 10);
   const points: Array<{ lat: number; lng: number }> = [];
 
-  const densePoints = Math.max(numPoints, 8);
+  const densePoints = distanceMiles <= 2 ? 4 : distanceMiles <= 5 ? 6 : 8;
 
   for (let i = 0; i < densePoints; i++) {
     const angle = baseAngle + (360 * i) / densePoints;
-    const r = radiusKm * (0.85 + Math.random() * 0.3);
+    const r = compensatedRadius * (0.9 + Math.random() * 0.2);
     const [lat, lng] = destinationPoint(startLat, startLng, r, angle);
     points.push({ lat, lng });
   }
 
   return [{ lat: startLat, lng: startLng }, ...points, { lat: startLat, lng: startLng }];
+}
+
+function generateOneWayViaPoints(
+  startLat: number,
+  startLng: number,
+  distanceMiles: number,
+  _numPoints: number,
+  routeVariant: number
+): Array<{ lat: number; lng: number }> {
+  const distanceKm = distanceMiles * 1.60934;
+  const straightLineKm = distanceKm * 0.82;
+
+  const baseAngle = routeVariant * 120 + (Math.random() * 30 - 15);
+  const points: Array<{ lat: number; lng: number }> = [];
+
+  const numMidpoints = distanceMiles <= 2 ? 2 : distanceMiles <= 5 ? 3 : 4;
+
+  for (let i = 1; i <= numMidpoints; i++) {
+    const progress = i / (numMidpoints + 1);
+    const dist = straightLineKm * progress;
+    const wobble = (Math.random() - 0.5) * straightLineKm * 0.08;
+    const angle = baseAngle + (wobble > 0 ? 10 : -10) * Math.abs(wobble) / straightLineKm;
+    const [lat, lng] = destinationPoint(startLat, startLng, dist, angle);
+    points.push({ lat, lng });
+  }
+
+  const [endLat, endLng] = destinationPoint(startLat, startLng, straightLineKm, baseAngle);
+  points.push({ lat: endLat, lng: endLng });
+
+  return [{ lat: startLat, lng: startLng }, ...points];
 }
 
 function generateElevationProfile(
@@ -720,21 +831,36 @@ export async function generateRoutes(params: RouteParams) {
   const effectiveUV = params.uvIndex ?? liveWeather.uvIndex;
 
   const routePromises = Array.from({ length: numRoutes }, async (_, r) => {
+    const isOneWay = params.routeType === "one_way";
     const numViaPoints = 6 + Math.floor(Math.random() * 4);
-    const viaPoints = generateViaPoints(
-      params.startLat,
-      params.startLng,
-      params.distanceMiles,
-      numViaPoints,
-      r
-    );
+    const viaPoints = isOneWay
+      ? generateOneWayViaPoints(
+          params.startLat,
+          params.startLng,
+          params.distanceMiles,
+          numViaPoints,
+          r
+        )
+      : generateLoopViaPoints(
+          params.startLat,
+          params.startLng,
+          params.distanceMiles,
+          numViaPoints,
+          r
+        );
 
     let routePoints: Array<{ lat: number; lng: number }>;
     let usedRoadRouting = false;
+    const targetKm = params.distanceMiles * 1.60934;
+    const tolerance = 1.15;
 
-    const snappedPoints = await snapToRoads(viaPoints);
-    if (snappedPoints && snappedPoints.length > 2) {
-      routePoints = snappedPoints;
+    const osrmResult = await snapToRoads(viaPoints);
+    if (osrmResult && osrmResult.points.length > 2) {
+      if (osrmResult.distanceKm > targetKm * tolerance) {
+        routePoints = trimRouteToDistance(osrmResult.points, targetKm, !isOneWay);
+      } else {
+        routePoints = osrmResult.points;
+      }
       usedRoadRouting = true;
     } else {
       routePoints = viaPoints;
@@ -746,7 +872,11 @@ export async function generateRoutes(params: RouteParams) {
     const waypointsWithElevation = routePoints.map((wp, i) => ({
       ...wp,
       elevation: elevations[i],
-      name: i === 0 ? "Start/Finish" : i === routePoints.length - 1 ? "Start/Finish" : undefined,
+      name: i === 0
+        ? (isOneWay ? "Start" : "Start/Finish")
+        : i === routePoints.length - 1
+          ? (isOneWay ? "Finish" : "Start/Finish")
+          : undefined,
     }));
 
     let totalDistanceKm = 0;
@@ -842,6 +972,7 @@ export async function generateRoutes(params: RouteParams) {
     const conditionsDuringRun = runWindow.conditionsChange;
 
     if (usedRoadRouting) highlights.push("Road-snapped pedestrian route");
+    if (isOneWay) highlights.push("One-way point-to-point route");
 
     if (effectiveTemp > 90) warnings.push("High temperature at start — stay hydrated");
     if (effectiveTemp < 32) warnings.push("Below freezing at start — watch for ice");

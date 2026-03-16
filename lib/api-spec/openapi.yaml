@@ -444,6 +444,11 @@ components:
           type: boolean
         preferTrails:
           type: boolean
+        routeType:
+          type: string
+          enum: [loop, one_way]
+          default: loop
+          description: "'loop' generates a circular route returning to start. 'one_way' generates a point-to-point route where distance is one direction only."
       required:
         - trainingGoal
         - distanceMiles

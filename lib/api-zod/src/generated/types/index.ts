@@ -28,6 +28,7 @@ export * from "./openaiConversationWithMessages";
 export * from "./openaiError";
 export * from "./openaiMessage";
 export * from "./routeRequest";
+export * from "./routeRequestRouteType";
 export * from "./routeRequestTimeOfDay";
 export * from "./routeResponse";
 export * from "./routeSegment";

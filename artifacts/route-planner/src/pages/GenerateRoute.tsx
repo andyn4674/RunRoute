@@ -6,7 +6,7 @@ import { ScoreRadar } from "@/components/charts/ScoreRadar";
 import { RouteChat } from "@/components/chat/RouteChat";
 import { useGenerateRoutes } from "@workspace/api-client-react";
 import type { RouteRequest } from "@workspace/api-client-react";
-import { Mountain, Flame, Heart, Zap, Clock, Dumbbell, Navigation, Loader2, Info, Map, Play, Watch, AlertTriangle } from "lucide-react";
+import { Mountain, Flame, Heart, Zap, Clock, Dumbbell, Navigation, Loader2, Info, Map, Play, Watch, AlertTriangle, RotateCcw, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useRouteStore } from "@/context/RouteContext";
@@ -53,6 +53,9 @@ export default function GenerateRoute() {
       }
       if (typeof params.uvIndex === "number" && params.uvIndex >= 0 && params.uvIndex <= 11) {
         updated.uvIndex = params.uvIndex as any;
+      }
+      if (params.routeType && ["loop", "one_way"].includes(params.routeType)) {
+        updated.routeType = params.routeType as any;
       }
       return updated;
     });
@@ -127,6 +130,35 @@ export default function GenerateRoute() {
                 onChange={(e) => setForm(prev => ({ ...prev, distanceMiles: parseFloat(e.target.value) }))}
                 className="w-full accent-primary bg-muted rounded-full h-2 appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(255,69,0,0.8)]"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold uppercase tracking-wider text-muted-foreground mb-2">Route Type</label>
+              <div className="flex bg-background rounded-xl p-1 border border-border">
+                <button
+                  onClick={() => setForm(prev => ({ ...prev, routeType: "loop" as any }))}
+                  className={cn(
+                    "flex-1 py-2.5 min-h-[44px] text-sm font-bold uppercase rounded-lg transition-colors flex items-center justify-center gap-2",
+                    form.routeType !== "one_way" ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <RotateCcw className="w-4 h-4" /> Loop
+                </button>
+                <button
+                  onClick={() => setForm(prev => ({ ...prev, routeType: "one_way" as any }))}
+                  className={cn(
+                    "flex-1 py-2.5 min-h-[44px] text-sm font-bold uppercase rounded-lg transition-colors flex items-center justify-center gap-2",
+                    form.routeType === "one_way" ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <ArrowRight className="w-4 h-4" /> One Way
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2 italic">
+                {form.routeType === "one_way" 
+                  ? "Point-to-point route — distance is one direction only."
+                  : "Circular route — starts and ends at the same point."}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

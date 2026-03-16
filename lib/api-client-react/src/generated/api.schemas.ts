@@ -39,6 +39,17 @@ export const RouteRequestTimeOfDay = {
   night: "night",
 } as const;
 
+/**
+ * 'loop' generates a circular route returning to start. 'one_way' generates a point-to-point route where distance is one direction only.
+ */
+export type RouteRequestRouteType =
+  (typeof RouteRequestRouteType)[keyof typeof RouteRequestRouteType];
+
+export const RouteRequestRouteType = {
+  loop: "loop",
+  one_way: "one_way",
+} as const;
+
 export interface RouteRequest {
   trainingGoal: TrainingGoal;
   /**
@@ -64,6 +75,8 @@ export interface RouteRequest {
   preferShade?: boolean;
   avoidTraffic?: boolean;
   preferTrails?: boolean;
+  /** 'loop' generates a circular route returning to start. 'one_way' generates a point-to-point route where distance is one direction only. */
+  routeType?: RouteRequestRouteType;
 }
 
 export interface ScoreBreakdown {

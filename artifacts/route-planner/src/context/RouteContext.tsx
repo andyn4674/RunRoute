@@ -19,6 +19,7 @@ const defaultForm: Partial<RouteRequest> = {
   timeOfDay: "morning" as any,
   preferShade: true,
   avoidTraffic: true,
+  routeType: "loop" as any,
 };
 
 const RouteContext = createContext<RouteState | null>(null);

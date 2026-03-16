@@ -5,6 +5,7 @@
  * RunRoute - Smart Running Route Planner API
  * OpenAPI spec version: 0.1.0
  */
+import type { RouteRequestRouteType } from "./routeRequestRouteType";
 import type { RouteRequestTimeOfDay } from "./routeRequestTimeOfDay";
 import type { TrainingGoal } from "./trainingGoal";
 
@@ -33,4 +34,6 @@ export interface RouteRequest {
   preferShade?: boolean;
   avoidTraffic?: boolean;
   preferTrails?: boolean;
+  /** 'loop' generates a circular route returning to start. 'one_way' generates a point-to-point route where distance is one direction only. */
+  routeType?: RouteRequestRouteType;
 }

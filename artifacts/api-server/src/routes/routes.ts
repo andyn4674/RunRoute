@@ -23,6 +23,7 @@ router.post("/routes/generate", async (req, res) => {
       preferShade: parsed.preferShade ?? undefined,
       avoidTraffic: parsed.avoidTraffic ?? undefined,
       preferTrails: parsed.preferTrails ?? undefined,
+      routeType: parsed.routeType ?? undefined,
     });
 
     for (const route of result.routes) {
