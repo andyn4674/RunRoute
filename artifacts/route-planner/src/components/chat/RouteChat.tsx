@@ -22,23 +22,38 @@ interface RouteParams {
   humidity?: number;
   windSpeedMph?: number;
   uvIndex?: number;
+  startLat?: number;
+  startLng?: number;
+  useCurrentLocation?: boolean;
 }
 
 interface RouteChatProps {
   onApplyParams: (params: RouteParams) => void;
   onGenerateRoute?: (params: RouteParams) => void;
+  mapPinLocation?: { lat: number; lng: number } | null;
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
-export function RouteChat({ onApplyParams, onGenerateRoute }: RouteChatProps) {
+export function RouteChat({ onApplyParams, onGenerateRoute, mapPinLocation }: RouteChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [pendingParams, setPendingParams] = useState<RouteParams | null>(null);
+  const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setGpsLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {},
+        { enableHighAccuracy: false, timeout: 5000 }
+      );
+    }
+  }, []);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -87,6 +102,16 @@ export function RouteChat({ onApplyParams, onGenerateRoute }: RouteChatProps) {
     }
   };
 
+  const resolveLocation = (params: RouteParams): RouteParams => {
+    const resolved = { ...params };
+    if (resolved.useCurrentLocation && gpsLocation) {
+      resolved.startLat = gpsLocation.lat;
+      resolved.startLng = gpsLocation.lng;
+    }
+    delete resolved.useCurrentLocation;
+    return resolved;
+  };
+
   const formatDisplayContent = (text: string): string => {
     return text
       .replace(/<route_params>[\s\S]*?<\/route_params>/g, "")
@@ -104,6 +129,20 @@ export function RouteChat({ onApplyParams, onGenerateRoute }: RouteChatProps) {
     if (!convId) {
       convId = await createConversation();
     }
+
+    let contextHint = "";
+    if (gpsLocation || mapPinLocation) {
+      const parts: string[] = [];
+      if (gpsLocation) {
+        parts.push(`[GPS current location: ${gpsLocation.lat.toFixed(4)}, ${gpsLocation.lng.toFixed(4)}]`);
+      }
+      if (mapPinLocation) {
+        parts.push(`[Map pin location: ${mapPinLocation.lat.toFixed(4)}, ${mapPinLocation.lng.toFixed(4)}]`);
+      }
+      contextHint = "\n" + parts.join(" ");
+    }
+
+    const messageToSend = userMessage + contextHint;
 
     const userMsg: Message = {
       id: Date.now(),
@@ -125,7 +164,7 @@ export function RouteChat({ onApplyParams, onGenerateRoute }: RouteChatProps) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: userMessage }),
+          body: JSON.stringify({ content: messageToSend }),
         }
       );
 
@@ -175,11 +214,13 @@ export function RouteChat({ onApplyParams, onGenerateRoute }: RouteChatProps) {
 
       const generateParams = extractGenerateRoute(fullText);
       if (generateParams && onGenerateRoute) {
-        onGenerateRoute(generateParams);
+        const resolved = resolveLocation(generateParams);
+        onGenerateRoute(resolved);
       } else {
         const params = extractRouteParams(fullText);
         if (params) {
-          setPendingParams(params);
+          const resolved = resolveLocation(params);
+          setPendingParams(resolved);
         }
       }
     } catch (err: any) {

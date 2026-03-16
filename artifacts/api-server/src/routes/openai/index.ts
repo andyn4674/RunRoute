@@ -26,6 +26,15 @@ Available route parameters:
 - humidity: number 0-100
 - windSpeedMph: number
 - uvIndex: number 0-11
+- useCurrentLocation: boolean — set to true when the user says "my current location", "where I am", "my GPS location", etc. This uses their real-time GPS coordinates instead of the map pin.
+- startLat / startLng: numbers — use ONLY when the user specifies exact coordinates. Do NOT set these if you want to use the map pin or GPS.
+
+IMPORTANT LOCATION CONTEXT:
+Each message may include location hints like:
+- [GPS current location: lat, lng] — the user's real GPS position
+- [Map pin location: lat, lng] — where they've tapped on the map
+
+These are DIFFERENT locations. When the user says "use my current location" or "start from where I am", set "useCurrentLocation": true. When they say "use the pin" or "start from the map point", do NOT set useCurrentLocation (the map pin is used by default). Never confuse the two.
 
 You have TWO response modes:
 

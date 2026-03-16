@@ -152,6 +152,10 @@ export default function GenerateRoute() {
     if (typeof params.avoidTraffic === "boolean") merged.avoidTraffic = params.avoidTraffic;
     if (typeof params.preferTrails === "boolean") merged.preferTrails = params.preferTrails;
     if (params.routeType) merged.routeType = params.routeType as any;
+    if (typeof params.startLat === "number" && typeof params.startLng === "number") {
+      merged.startLat = params.startLat;
+      merged.startLng = params.startLng;
+    }
 
     if (!merged.startLat || !merged.startLng) {
       toast({ title: "Set a start location first", description: "Tap the map to set your starting point before generating.", variant: "destructive" });
@@ -498,7 +502,11 @@ export default function GenerateRoute() {
         </AnimatePresence>
       </div>
 
-      <RouteChat onApplyParams={handleApplyParams} onGenerateRoute={handleChatGenerate} />
+      <RouteChat
+        onApplyParams={handleApplyParams}
+        onGenerateRoute={handleChatGenerate}
+        mapPinLocation={form.startLat && form.startLng ? { lat: form.startLat, lng: form.startLng } : null}
+      />
     </div>
   );
 }
