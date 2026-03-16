@@ -115,6 +115,8 @@ export const GenerateRoutesResponse = zod.object({
       surfaceBreakdown: zod.record(zod.string(), zod.number()),
       warnings: zod.array(zod.string()),
       highlights: zod.array(zod.string()),
+      notRecommended: zod.boolean().optional(),
+      notRecommendedReason: zod.string().optional(),
     }),
   ),
   weatherSummary: zod.object({
@@ -190,6 +192,8 @@ export const GetRouteResponse = zod.object({
   surfaceBreakdown: zod.record(zod.string(), zod.number()),
   warnings: zod.array(zod.string()),
   highlights: zod.array(zod.string()),
+  notRecommended: zod.boolean().optional(),
+  notRecommendedReason: zod.string().optional(),
 });
 
 /**

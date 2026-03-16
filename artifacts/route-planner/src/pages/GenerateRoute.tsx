@@ -6,7 +6,7 @@ import { ScoreRadar } from "@/components/charts/ScoreRadar";
 import { RouteChat } from "@/components/chat/RouteChat";
 import { useGenerateRoutes } from "@workspace/api-client-react";
 import type { RouteRequest } from "@workspace/api-client-react";
-import { Mountain, Flame, Heart, Zap, Clock, Dumbbell, Navigation, Loader2, Info, Map, Play, Watch } from "lucide-react";
+import { Mountain, Flame, Heart, Zap, Clock, Dumbbell, Navigation, Loader2, Info, Map, Play, Watch, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useRouteStore } from "@/context/RouteContext";
@@ -158,14 +158,14 @@ export default function GenerateRoute() {
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-xl flex-1 flex flex-col min-h-[400px] sm:min-h-[500px]">
+        <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-xl">
           <h2 className="text-xl sm:text-2xl font-display mb-2 flex items-center gap-2">
             <Navigation className="text-primary w-5 h-5 sm:w-6 sm:h-6" />
             2. Start Location
           </h2>
           <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">Tap on the map to set your starting point.</p>
           
-          <div className="flex-1 min-h-[250px] sm:min-h-[300px] rounded-xl overflow-hidden border-2 border-border focus-within:border-primary transition-colors">
+          <div className="h-[300px] sm:h-[350px] lg:h-[400px] rounded-xl overflow-hidden border-2 border-border focus-within:border-primary transition-colors">
             <MapComponent 
               startLocation={form.startLat ? [form.startLat, form.startLng!] : null}
               onLocationSelect={(lat, lng) => setForm(prev => ({ ...prev, startLat: lat, startLng: lng }))}
@@ -245,6 +245,15 @@ export default function GenerateRoute() {
                     )}
                   >
                     <div className="p-6">
+                      {route.notRecommended && (
+                        <div className="flex items-center gap-2 px-3 py-2 mb-4 bg-destructive/15 border border-destructive/30 rounded-xl">
+                          <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                          <span className="text-xs font-bold uppercase tracking-wider text-destructive">Not Recommended</span>
+                          {route.notRecommendedReason && (
+                            <span className="text-xs text-destructive/80 ml-1">— {route.notRecommendedReason}</span>
+                          )}
+                        </div>
+                      )}
                       <div className="flex justify-between items-start mb-4">
                         <div>
                           <div className="flex items-center gap-3 mb-2">

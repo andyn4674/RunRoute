@@ -392,6 +392,10 @@ components:
           type: array
           items:
             type: string
+        notRecommended:
+          type: boolean
+        notRecommendedReason:
+          type: string
       required:
         - id
         - name

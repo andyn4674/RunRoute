@@ -86,12 +86,17 @@ A web application that generates personalized running routes based on training g
 ### Route Generation Engine
 Located in `artifacts/api-server/src/routes/route-engine.ts`. Uses:
 - OSRM pedestrian routing API (router.project-osrm.org/route/v1/foot/) to snap routes to actual roads/sidewalks
+- Full OSRM geometry preserved (no downsampling) for clean road-following rendering
 - Generates via-points in a loop pattern, sends to OSRM for road-snapped geometry, decodes polyline response
-- Falls back to raw via-points if OSRM is unavailable (8s timeout)
+- Falls back to raw via-points if OSRM is unavailable (10s timeout)
+- Live weather via Open-Meteo API (api.open-meteo.com) — no API key needed
+- AI-generated local advisories (events, road closures, police activity, construction) via OpenAI, cached 30min per area
+- Advisory output validated with strict schema checks; malformed data falls back to empty array
+- Routes flagged `notRecommended` for extreme weather (thunderstorm, >105°F, <10°F, >35mph wind, heavy rain) or high-severity advisories
 - Goal-specific elevation profiles (steep for mountain hiking, flat for speed/recovery)
 - Training goal weight system for multi-factor scoring
 - Environmental condition awareness (temperature, time of day, shade)
-- Async route generation with Promise.all for parallel OSRM calls
+- Async route generation with Promise.all for parallel OSRM + weather + advisory calls
 
 ## TypeScript & Composite Projects
 
@@ -125,9 +130,12 @@ React + Vite frontend for the running route planner.
 - Pages: Dashboard, GenerateRoute, RouteDetail, RunTracker, RunHistory, Profile
 - Components: Layout (sidebar + bottom tab nav), MapComponent (Leaflet + GPS geolocation), ScoreRadar (Recharts), ElevationProfile (Recharts), RouteChat (AI chat panel)
 - Mobile-first responsive design: bottom tab navigation on mobile, sidebar on desktop (md+)
+- Map uses explicit height (h-[300px] mobile, h-[350px] tablet, h-[400px] desktop) for reliable rendering
 - Touch targets: min 44-48px for all interactive elements
 - iOS safe area support via viewport-fit=cover and env(safe-area-inset-bottom)
+- Route state persisted via RouteContext (context/RouteContext.tsx) — survives navigation, cleared on "Start Run"
 - Uses `@workspace/api-client-react` for API hooks
+- Routes have optional `notRecommended` flag with reason — displayed as red warning badge
 
 ### `lib/db` (`@workspace/db`)
 

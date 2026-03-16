@@ -129,6 +129,8 @@ export interface GeneratedRoute {
   surfaceBreakdown: GeneratedRouteSurfaceBreakdown;
   warnings: string[];
   highlights: string[];
+  notRecommended?: boolean;
+  notRecommendedReason?: string;
 }
 
 export interface WeatherSummary {

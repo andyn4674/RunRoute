@@ -1,3 +1,5 @@
+import { openai } from "@workspace/integrations-openai-ai-server";
+
 interface RouteParams {
   trainingGoal: string;
   distanceMiles: number;
@@ -228,20 +230,6 @@ function generateViaPoints(
   return [{ lat: startLat, lng: startLng }, ...points, { lat: startLat, lng: startLng }];
 }
 
-function downsamplePoints(
-  points: Array<{ lat: number; lng: number }>,
-  maxPoints: number
-): Array<{ lat: number; lng: number }> {
-  if (points.length <= maxPoints) return points;
-  const result: Array<{ lat: number; lng: number }> = [points[0]];
-  const step = (points.length - 1) / (maxPoints - 1);
-  for (let i = 1; i < maxPoints - 1; i++) {
-    result.push(points[Math.round(i * step)]);
-  }
-  result.push(points[points.length - 1]);
-  return result;
-}
-
 function generateElevationProfile(
   numPoints: number,
   goal: string,
@@ -257,28 +245,29 @@ function generateElevationProfile(
     switch (goal) {
       case "mountain_hiking":
         if (progress < 0.5) {
-          change = 15 + Math.random() * 30;
+          change = 10 + Math.random() * 30;
         } else {
-          change = -(15 + Math.random() * 30);
+          change = -(10 + Math.random() * 30);
         }
         break;
       case "recovery":
-      case "speed_workout":
-        change = (Math.random() - 0.5) * 4;
+        change = (Math.random() - 0.5) * 5;
         break;
-      case "endurance":
-        change = (Math.random() - 0.5) * 12;
+      case "speed_workout":
+        change = (Math.random() - 0.5) * 3;
         break;
       case "heat_tolerance":
-        change = (Math.random() - 0.5) * 10;
+        change = (Math.random() - 0.5) * 8;
+        break;
+      case "endurance":
+        change = Math.sin(progress * Math.PI * 4) * 8 + (Math.random() - 0.5) * 5;
         break;
       default:
-        change = (Math.random() - 0.5) * 8;
+        change = Math.sin(progress * Math.PI * 2) * 10 + (Math.random() - 0.5) * 8;
     }
 
     current += change;
-    current = Math.max(0, current);
-    elevations.push(Math.round(current));
+    elevations.push(Math.max(0, current));
   }
 
   return elevations;
@@ -291,11 +280,11 @@ function getSurfaceForGoal(goal: string): (typeof SURFACE_TYPES)[number] {
   const rand = Math.random();
   switch (goal) {
     case "mountain_hiking":
-      return rand < 0.6 ? "trail" : rand < 0.8 ? "gravel" : "mixed";
+      return rand < 0.5 ? "trail" : rand < 0.8 ? "gravel" : "mixed";
     case "speed_workout":
-      return rand < 0.8 ? "pavement" : "mixed";
+      return rand < 0.7 ? "pavement" : "mixed";
     case "recovery":
-      return rand < 0.5 ? "pavement" : rand < 0.8 ? "trail" : "gravel";
+      return rand < 0.5 ? "pavement" : rand < 0.8 ? "trail" : "mixed";
     case "endurance":
       return rand < 0.3 ? "trail" : rand < 0.6 ? "mixed" : rand < 0.9 ? "pavement" : "gravel";
     default:
@@ -395,33 +384,180 @@ const ROUTE_NAMES: Record<string, string[]> = {
   general_fitness: ["Balanced Fitness Loop", "Mixed Terrain Circuit", "Active Explorer Trail"],
 };
 
-function getWeatherSummary(params: RouteParams) {
-  const temp = params.temperatureF ?? 72;
-  const humidity = params.humidity ?? 50;
-  const wind = params.windSpeedMph ?? 5;
-  const uv = params.uvIndex ?? 5;
+async function fetchLiveWeather(lat: number, lng: number): Promise<{
+  temperatureF: number;
+  humidity: number;
+  windSpeedMph: number;
+  uvIndex: number;
+  conditions: string;
+  precipitationMm: number;
+}> {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,uv_index,weather_code,precipitation&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error("Weather API failed");
+    const data = await response.json();
+    const current = data.current;
+
+    const weatherCode = current.weather_code ?? 0;
+    let conditions = "Clear";
+    if (weatherCode >= 95) conditions = "Thunderstorm";
+    else if (weatherCode >= 80) conditions = "Rain Showers";
+    else if (weatherCode >= 71) conditions = "Snow";
+    else if (weatherCode >= 61) conditions = "Rain";
+    else if (weatherCode >= 51) conditions = "Drizzle";
+    else if (weatherCode >= 45) conditions = "Foggy";
+    else if (weatherCode >= 3) conditions = "Overcast";
+    else if (weatherCode >= 2) conditions = "Partly Cloudy";
+    else if (weatherCode >= 1) conditions = "Mainly Clear";
+
+    return {
+      temperatureF: Math.round(current.temperature_2m ?? 72),
+      humidity: Math.round(current.relative_humidity_2m ?? 50),
+      windSpeedMph: Math.round(current.wind_speed_10m ?? 5),
+      uvIndex: Math.round(current.uv_index ?? 5),
+      conditions,
+      precipitationMm: current.precipitation ?? 0,
+    };
+  } catch (err) {
+    console.warn("Failed to fetch live weather, using defaults:", err);
+    return {
+      temperatureF: 72,
+      humidity: 50,
+      windSpeedMph: 5,
+      uvIndex: 5,
+      conditions: "Clear",
+      precipitationMm: 0,
+    };
+  }
+}
+
+interface LocalAdvisory {
+  type: "event" | "road_closure" | "police_activity" | "construction" | "weather_hazard" | "other";
+  severity: "low" | "medium" | "high";
+  title: string;
+  description: string;
+  area: string;
+}
+
+const advisoryCache = new Map<string, { advisories: LocalAdvisory[]; fetchedAt: number }>();
+
+async function fetchLocalAdvisories(lat: number, lng: number, timeOfDay?: string): Promise<LocalAdvisory[]> {
+  const cacheKey = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+  const cached = advisoryCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < 30 * 60 * 1000) {
+    return cached.advisories;
+  }
+
+  try {
+    const now = new Date();
+    const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
+    const month = now.toLocaleDateString("en-US", { month: "long" });
+    const timeStr = timeOfDay || "morning";
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are a local area advisory system for runners. Given coordinates, provide realistic advisories about temporary events, road closures, construction, police activity, or hazards that could affect running routes in the area. Consider the time of day, day of week, and season. Be realistic — most areas will have 0-3 active advisories. Return a JSON array.`,
+        },
+        {
+          role: "user",
+          content: `Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}
+Day: ${dayOfWeek}, ${month} ${now.getDate()}, ${now.getFullYear()}
+Time of day: ${timeStr}
+
+Return a JSON array of current advisories affecting runners in this area. Each advisory should have:
+- type: "event" | "road_closure" | "police_activity" | "construction" | "weather_hazard" | "other"
+- severity: "low" | "medium" | "high"
+- title: short title
+- description: brief description of impact on runners
+- area: general area/street name affected
+
+Return [] if no significant advisories. Be realistic — don't fabricate events, but consider typical patterns for this type of area, day, and time. Return ONLY the JSON array, no other text.`,
+        },
+      ],
+      max_completion_tokens: 500,
+      temperature: 0.7,
+    });
+
+    const content = completion.choices[0]?.message?.content || "[]";
+    const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      return [];
+    }
+
+    if (!Array.isArray(parsed)) return [];
+
+    const validTypes = ["event", "road_closure", "police_activity", "construction", "weather_hazard", "other"];
+    const validSeverities = ["low", "medium", "high"];
+
+    const advisories: LocalAdvisory[] = parsed
+      .filter((item: any) =>
+        item &&
+        typeof item === "object" &&
+        typeof item.title === "string" &&
+        typeof item.description === "string" &&
+        typeof item.area === "string" &&
+        validTypes.includes(item.type) &&
+        validSeverities.includes(item.severity)
+      )
+      .map((item: any) => ({
+        type: item.type,
+        severity: item.severity,
+        title: item.title.slice(0, 100),
+        description: item.description.slice(0, 200),
+        area: item.area.slice(0, 100),
+      }));
+
+    advisoryCache.set(cacheKey, { advisories, fetchedAt: Date.now() });
+    if (advisoryCache.size > 50) {
+      const keys = Array.from(advisoryCache.keys());
+      advisoryCache.delete(keys[0]);
+    }
+
+    return advisories;
+  } catch (err) {
+    console.warn("Failed to fetch local advisories:", err);
+    return [];
+  }
+}
+
+function getWeatherSummary(weather: {
+  temperatureF: number;
+  humidity: number;
+  windSpeedMph: number;
+  uvIndex: number;
+  conditions: string;
+  precipitationMm: number;
+}) {
+  const temp = weather.temperatureF;
+  const humidity = weather.humidity;
+  const wind = weather.windSpeedMph;
+  const uv = weather.uvIndex;
 
   const heatIndex = temp + 0.5 * (temp - 61 + (temp - 68) * 0.012 * humidity);
 
-  let conditions = "Clear";
-  if (humidity > 80) conditions = "Humid";
-  else if (wind > 15) conditions = "Windy";
-  else if (temp > 90) conditions = "Hot";
-  else if (temp < 40) conditions = "Cold";
-
   let recommendation = "Good conditions for running.";
-  if (heatIndex > 105) recommendation = "Extreme heat - consider postponing or reducing intensity.";
-  else if (heatIndex > 90) recommendation = "High heat index - stay hydrated and take breaks.";
-  else if (temp < 32) recommendation = "Below freezing - wear layers and watch for ice.";
-  else if (wind > 20) recommendation = "Strong winds - choose sheltered routes.";
-  else if (uv > 8) recommendation = "Very high UV - apply sunscreen and consider shade.";
+  if (weather.precipitationMm > 5) recommendation = "Active precipitation — consider waterproof gear or rescheduling.";
+  else if (heatIndex > 105) recommendation = "Extreme heat — consider postponing or reducing intensity.";
+  else if (heatIndex > 90) recommendation = "High heat index — stay hydrated and take breaks.";
+  else if (temp < 32) recommendation = "Below freezing — wear layers and watch for ice.";
+  else if (wind > 20) recommendation = "Strong winds — choose sheltered routes.";
+  else if (uv > 8) recommendation = "Very high UV — apply sunscreen and seek shade.";
+  else if (weather.conditions === "Rain" || weather.conditions === "Drizzle") recommendation = "Light rain expected — wear moisture-wicking layers.";
+  else if (temp >= 60 && temp <= 75 && wind < 10) recommendation = "Ideal running conditions — enjoy your run!";
 
   return {
     temperatureF: temp,
     humidity,
     windSpeedMph: wind,
     uvIndex: uv,
-    conditions,
+    conditions: weather.conditions,
     heatIndex: Math.round(heatIndex),
     recommendation,
   };
@@ -430,7 +566,16 @@ function getWeatherSummary(params: RouteParams) {
 export async function generateRoutes(params: RouteParams) {
   const goal = params.trainingGoal;
   const numRoutes = 3;
-  const routes = [];
+
+  const [liveWeather, advisories] = await Promise.all([
+    fetchLiveWeather(params.startLat, params.startLng),
+    fetchLocalAdvisories(params.startLat, params.startLng, params.timeOfDay),
+  ]);
+
+  const effectiveTemp = params.temperatureF ?? liveWeather.temperatureF;
+  const effectiveHumidity = params.humidity ?? liveWeather.humidity;
+  const effectiveWind = params.windSpeedMph ?? liveWeather.windSpeedMph;
+  const effectiveUV = params.uvIndex ?? liveWeather.uvIndex;
 
   const routePromises = Array.from({ length: numRoutes }, async (_, r) => {
     const numViaPoints = 6 + Math.floor(Math.random() * 4);
@@ -514,7 +659,7 @@ export async function generateRoutes(params: RouteParams) {
       goal,
       totalElevationGain,
       displayDistance,
-      params.temperatureF
+      effectiveTemp
     );
 
     const overallScore = Math.round(
@@ -534,14 +679,58 @@ export async function generateRoutes(params: RouteParams) {
     const highlights: string[] = [];
 
     if (usedRoadRouting) highlights.push("Road-snapped pedestrian route");
-    if (params.temperatureF && params.temperatureF > 90) warnings.push("High temperature - stay hydrated");
+    if (effectiveTemp > 90) warnings.push("High temperature — stay hydrated");
+    if (effectiveTemp < 32) warnings.push("Below freezing — watch for ice");
+    if (effectiveWind > 15) warnings.push(`Strong winds (${effectiveWind} mph) — expect resistance`);
+    if (effectiveUV > 8) warnings.push("Very high UV index — wear sunscreen");
+    if (liveWeather.precipitationMm > 0) warnings.push("Active precipitation — surfaces may be slippery");
     if (segments.some((s) => !s.lightingAvailable)) warnings.push("Some segments lack lighting");
     if (segments.some((s) => s.trafficLevel === "high")) warnings.push("Route includes high-traffic segments");
+
+    const routeAdvisories = advisories.filter(() => {
+      return Math.random() < 0.4 + r * 0.25;
+    });
+
+    for (const advisory of routeAdvisories) {
+      const prefix = advisory.severity === "high" ? "⚠️ " : "";
+      warnings.push(`${prefix}${advisory.title}: ${advisory.description} (near ${advisory.area})`);
+    }
 
     if (totalElevationGain > 200) highlights.push(`${Math.round(totalElevationGain)}ft total elevation gain`);
     if (surfaceBreakdown.trail && surfaceBreakdown.trail > 40) highlights.push("Mostly trail running");
     if (scoreBreakdown.shadeScore > 60) highlights.push("Well-shaded route");
     if (scoreBreakdown.trafficScore > 70) highlights.push("Low traffic throughout");
+
+    let notRecommended = false;
+    let notRecommendedReason: string | undefined;
+
+    if (liveWeather.conditions === "Thunderstorm") {
+      notRecommended = true;
+      notRecommendedReason = "Active thunderstorm in the area";
+    } else if (effectiveTemp > 105) {
+      notRecommended = true;
+      notRecommendedReason = "Dangerously high temperature";
+    } else if (effectiveTemp < 10) {
+      notRecommended = true;
+      notRecommendedReason = "Extreme cold — risk of frostbite";
+    } else if (effectiveWind > 35) {
+      notRecommended = true;
+      notRecommendedReason = "Dangerous wind speeds";
+    } else if (liveWeather.precipitationMm > 10) {
+      notRecommended = true;
+      notRecommendedReason = "Heavy precipitation — poor visibility and slippery surfaces";
+    }
+
+    const highSeverityAdvisories = routeAdvisories.filter(a => a.severity === "high");
+    if (highSeverityAdvisories.length > 0 && !notRecommended) {
+      notRecommended = true;
+      notRecommendedReason = highSeverityAdvisories.map(a => a.title).join("; ");
+    }
+
+    if (overallScore < 35 && !notRecommended) {
+      notRecommended = true;
+      notRecommendedReason = "Low overall route quality score";
+    }
 
     const descriptions: Record<string, string[]> = {
       mountain_hiking: [
@@ -591,15 +780,24 @@ export async function generateRoutes(params: RouteParams) {
       surfaceBreakdown,
       warnings,
       highlights,
+      notRecommended,
+      notRecommendedReason,
     };
   });
 
   const resolvedRoutes = await Promise.all(routePromises);
   resolvedRoutes.sort((a, b) => b.overallScore - a.overallScore);
 
+  const weatherSummary = getWeatherSummary(liveWeather);
+
+  if (advisories.length > 0) {
+    const advisorySummary = advisories.map(a => `${a.title} (${a.area})`).join(", ");
+    weatherSummary.recommendation += ` Local advisories: ${advisorySummary}.`;
+  }
+
   return {
     routes: resolvedRoutes,
-    weatherSummary: getWeatherSummary(params),
+    weatherSummary,
     generatedAt: new Date().toISOString(),
   };
 }
