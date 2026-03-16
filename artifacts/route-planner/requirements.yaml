@@ -1,0 +1,21 @@
+packages:
+  "framer-motion": "Animations and page transitions"
+  "recharts": "Radar and elevation charts for route score breakdown"
+  "react-leaflet": "Interactive maps for route plotting"
+  "leaflet": "Mapping engine"
+  "@types/leaflet": "Types for leaflet"
+  "clsx": "Utility for Tailwind class merging"
+  "tailwind-merge": "Utility for Tailwind class merging"
+  "date-fns": "Formatting dates for run history"
+
+images:
+  - path: "artifacts/route-planner/public/images/hero-runner.png"
+    description: "High contrast athletic photography of a runner tying shoes at night in a futuristic city, cinematic neon lighting, moody, highly detailed"
+    aspect_ratio: "16:9"
+  - path: "artifacts/route-planner/public/images/abstract-topo.png"
+    description: "Abstract dark topographic map lines glowing in neon orange and cyan, modern sleek dark athletic background"
+    aspect_ratio: "16:9"
+
+notes:
+  - Expects backend to serve generated routes properly.
+  - Orval generated hooks are used from @workspace/api-client-react

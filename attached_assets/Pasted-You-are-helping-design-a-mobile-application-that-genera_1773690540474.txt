@@ -1,0 +1,66 @@
+You are helping design a mobile application that generates personalized running routes based on a user’s training goals and real-time environmental conditions. The goal is to create a route planning system that optimizes for training effectiveness, safety, and environmental context rather than simply distance or popularity.
+Concept Overview
+The app allows runners to generate running routes that adapt to both their personal training objectives and current environmental conditions in their city. Instead of traditional route planners that only consider distance or elevation, this system incorporates multiple real-time and geographic factors to generate the most appropriate route for a given run.
+Examples of training goals include:
+* Training for mountain hiking (prioritize elevation gain and sustained climbs)
+* Building heat tolerance (prioritize routes with low shade exposure during hot conditions)
+* Recovery runs (flat terrain, shaded routes, minimal intersections)
+* Speed workouts (flat roads with minimal interruptions)
+* Endurance training (long continuous routes with gradual elevation changes)
+The system should dynamically adjust route recommendations based on real-time environmental inputs and the user’s historical performance.
+Key Environmental Factors
+The routing engine should consider multiple environmental and infrastructure variables when generating routes, including:
+* Current weather conditions (temperature, humidity, wind, UV index)
+* Elevation gain and terrain grade
+* Tree canopy / shade coverage
+* Sidewalk and trail availability
+* Surface type (pavement, gravel, trail)
+* Traffic levels
+* Road closures and construction
+* Local events that may cause crowding
+* Time-of-day crowd patterns
+* Safety signals such as lighting or known high-risk areas
+The goal is to generate routes that optimize for both training goals and environmental suitability.
+Personalization
+The system should learn from the user’s past runs to personalize future route recommendations.
+Examples of signals to learn from:
+* Pace vs elevation difficulty
+* Distance tolerance
+* Preferred terrain types
+* Performance in hot or cold conditions
+* Recovery time after different types of runs
+Over time, the app should adapt route generation to match the runner’s abilities and training progress.
+Example Scenario
+A runner opens the app and enters:
+* Goal: train for a mountain hike
+* Distance: 6 miles
+* Current time: afternoon
+* Current temperature: 95°F
+The system should generate routes that:
+* Include sustained elevation climbs
+* Avoid excessive traffic or dangerous roads
+* Possibly reduce shade if the runner is intentionally training for heat exposure
+* Avoid crowded parks or areas with events
+* Stay within the requested distance
+Technical Approach
+Assume the routing system uses a graph-based map representation where:
+* Nodes represent intersections
+* Edges represent road or trail segments
+Each edge contains metadata such as:
+* distance
+* elevation gain
+* shade percentage
+* surface type
+* traffic level
+* safety score
+Routes can then be generated using algorithms such as A* search with custom scoring functions based on the runner’s goal and environmental conditions.
+What I want from you
+Please help with the following:
+1. Propose a full system architecture for this application.
+2. Suggest the best data sources for environmental and geographic data.
+3. Design the route scoring model used to rank candidate paths.
+4. Describe how user personalization could be implemented.
+5. Identify the hardest technical challenges in building this system.
+6. Suggest an MVP feature set that could realistically be built by a small team or student project.
+7. Recommend technologies or frameworks for the backend, mobile app, and routing engine.
+Focus on practicality and implementation feasibility rather than purely theoretical solutions.

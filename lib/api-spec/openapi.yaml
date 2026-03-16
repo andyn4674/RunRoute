@@ -1,22 +1,26 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: RunRoute - Smart Running Route Planner API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: routes
+    description: Route generation and management
+  - name: profiles
+    description: User profile and preferences
+  - name: runs
+    description: Run history tracking
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +28,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /routes/generate:
+    post:
+      operationId: generateRoutes
+      tags: [routes]
+      summary: Generate personalized running routes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteRequest"
+      responses:
+        "200":
+          description: Generated routes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteResponse"
+  /routes/{routeId}:
+    get:
+      operationId: getRoute
+      tags: [routes]
+      summary: Get a specific route by ID
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Route details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedRoute"
+        "404":
+          description: Route not found
+  /profiles:
+    get:
+      operationId: getProfile
+      tags: [profiles]
+      summary: Get user profile and preferences
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+    put:
+      operationId: updateProfile
+      tags: [profiles]
+      summary: Update user preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserProfileUpdate"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+  /runs:
+    get:
+      operationId: listRuns
+      tags: [runs]
+      summary: List past runs
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: number
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: number
+            default: 0
+      responses:
+        "200":
+          description: List of runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunListResponse"
+    post:
+      operationId: logRun
+      tags: [runs]
+      summary: Log a completed run
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogRunRequest"
+      responses:
+        "201":
+          description: Run logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunRecord"
+  /routes/scoring-factors:
+    get:
+      operationId: getScoringFactors
+      tags: [routes]
+      summary: Get available scoring factors and their weights for each training goal
+      responses:
+        "200":
+          description: Scoring factors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoringFactorsResponse"
 components:
   schemas:
     HealthStatus:
@@ -34,3 +157,417 @@ components:
       required:
         - status
 
+    TrainingGoal:
+      type: string
+      enum:
+        - mountain_hiking
+        - heat_tolerance
+        - recovery
+        - speed_workout
+        - endurance
+        - general_fitness
+
+    SurfaceType:
+      type: string
+      enum:
+        - pavement
+        - gravel
+        - trail
+        - mixed
+
+    RouteRequest:
+      type: object
+      properties:
+        trainingGoal:
+          $ref: "#/components/schemas/TrainingGoal"
+        distanceMiles:
+          type: number
+          minimum: 0.5
+          maximum: 30
+        startLat:
+          type: number
+        startLng:
+          type: number
+        temperatureF:
+          type: number
+        humidity:
+          type: number
+          minimum: 0
+          maximum: 100
+        windSpeedMph:
+          type: number
+        uvIndex:
+          type: number
+          minimum: 0
+          maximum: 11
+        timeOfDay:
+          type: string
+          enum: [morning, afternoon, evening, night]
+        preferShade:
+          type: boolean
+        avoidTraffic:
+          type: boolean
+        preferTrails:
+          type: boolean
+      required:
+        - trainingGoal
+        - distanceMiles
+        - startLat
+        - startLng
+
+    RouteResponse:
+      type: object
+      properties:
+        routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeneratedRoute"
+        weatherSummary:
+          $ref: "#/components/schemas/WeatherSummary"
+        generatedAt:
+          type: string
+          format: date-time
+      required:
+        - routes
+        - weatherSummary
+        - generatedAt
+
+    GeneratedRoute:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        distanceMiles:
+          type: number
+        estimatedDurationMinutes:
+          type: number
+        elevationGainFt:
+          type: number
+        elevationLossFt:
+          type: number
+        overallScore:
+          type: number
+          minimum: 0
+          maximum: 100
+        scoreBreakdown:
+          $ref: "#/components/schemas/ScoreBreakdown"
+        waypoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/Waypoint"
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteSegment"
+        surfaceBreakdown:
+          type: object
+          additionalProperties:
+            type: number
+        warnings:
+          type: array
+          items:
+            type: string
+        highlights:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - name
+        - description
+        - distanceMiles
+        - estimatedDurationMinutes
+        - elevationGainFt
+        - elevationLossFt
+        - overallScore
+        - scoreBreakdown
+        - waypoints
+        - segments
+        - surfaceBreakdown
+        - warnings
+        - highlights
+
+    ScoreBreakdown:
+      type: object
+      properties:
+        terrainMatch:
+          type: number
+        safetyScore:
+          type: number
+        environmentalFit:
+          type: number
+        trainingEffectiveness:
+          type: number
+        shadeScore:
+          type: number
+        trafficScore:
+          type: number
+      required:
+        - terrainMatch
+        - safetyScore
+        - environmentalFit
+        - trainingEffectiveness
+        - shadeScore
+        - trafficScore
+
+    Waypoint:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        elevation:
+          type: number
+        name:
+          type: string
+      required:
+        - lat
+        - lng
+        - elevation
+
+    RouteSegment:
+      type: object
+      properties:
+        startIndex:
+          type: integer
+        endIndex:
+          type: integer
+        distanceMiles:
+          type: number
+        elevationGainFt:
+          type: number
+        grade:
+          type: number
+        surfaceType:
+          $ref: "#/components/schemas/SurfaceType"
+        shadePercentage:
+          type: number
+        trafficLevel:
+          type: string
+          enum: [low, moderate, high]
+        safetyScore:
+          type: number
+          minimum: 0
+          maximum: 10
+        lightingAvailable:
+          type: boolean
+      required:
+        - startIndex
+        - endIndex
+        - distanceMiles
+        - elevationGainFt
+        - grade
+        - surfaceType
+        - shadePercentage
+        - trafficLevel
+        - safetyScore
+        - lightingAvailable
+
+    WeatherSummary:
+      type: object
+      properties:
+        temperatureF:
+          type: number
+        humidity:
+          type: number
+        windSpeedMph:
+          type: number
+        uvIndex:
+          type: number
+        conditions:
+          type: string
+        heatIndex:
+          type: number
+        recommendation:
+          type: string
+      required:
+        - temperatureF
+        - humidity
+        - windSpeedMph
+        - uvIndex
+        - conditions
+        - heatIndex
+        - recommendation
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        nickname:
+          type: string
+        preferredGoals:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrainingGoal"
+        preferredDistanceMiles:
+          type: number
+        averagePaceMinsPerMile:
+          type: number
+        preferredSurfaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/SurfaceType"
+        heatTolerance:
+          type: string
+          enum: [low, moderate, high]
+        elevationTolerance:
+          type: string
+          enum: [low, moderate, high]
+        totalRunsLogged:
+          type: integer
+        totalMilesRun:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - nickname
+        - preferredGoals
+        - preferredDistanceMiles
+        - averagePaceMinsPerMile
+        - preferredSurfaces
+        - heatTolerance
+        - elevationTolerance
+        - totalRunsLogged
+        - totalMilesRun
+        - createdAt
+
+    UserProfileUpdate:
+      type: object
+      properties:
+        nickname:
+          type: string
+        preferredGoals:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrainingGoal"
+        preferredDistanceMiles:
+          type: number
+        averagePaceMinsPerMile:
+          type: number
+        preferredSurfaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/SurfaceType"
+        heatTolerance:
+          type: string
+          enum: [low, moderate, high]
+        elevationTolerance:
+          type: string
+          enum: [low, moderate, high]
+
+    RunRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        routeId:
+          type: string
+        trainingGoal:
+          $ref: "#/components/schemas/TrainingGoal"
+        distanceMiles:
+          type: number
+        durationMinutes:
+          type: number
+        avgPaceMinsPerMile:
+          type: number
+        elevationGainFt:
+          type: number
+        temperatureF:
+          type: number
+        perceivedEffort:
+          type: integer
+          minimum: 1
+          maximum: 10
+        notes:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - routeId
+        - trainingGoal
+        - distanceMiles
+        - durationMinutes
+        - avgPaceMinsPerMile
+        - elevationGainFt
+        - temperatureF
+        - perceivedEffort
+        - completedAt
+
+    LogRunRequest:
+      type: object
+      properties:
+        routeId:
+          type: string
+        trainingGoal:
+          $ref: "#/components/schemas/TrainingGoal"
+        distanceMiles:
+          type: number
+        durationMinutes:
+          type: number
+        elevationGainFt:
+          type: number
+        temperatureF:
+          type: number
+        perceivedEffort:
+          type: integer
+          minimum: 1
+          maximum: 10
+        notes:
+          type: string
+      required:
+        - routeId
+        - trainingGoal
+        - distanceMiles
+        - durationMinutes
+        - elevationGainFt
+        - temperatureF
+        - perceivedEffort
+
+    RunListResponse:
+      type: object
+      properties:
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunRecord"
+        total:
+          type: integer
+      required:
+        - runs
+        - total
+
+    ScoringFactorsResponse:
+      type: object
+      properties:
+        goals:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/GoalWeights"
+      required:
+        - goals
+
+    GoalWeights:
+      type: object
+      properties:
+        label:
+          type: string
+        description:
+          type: string
+        weights:
+          type: object
+          additionalProperties:
+            type: number
+      required:
+        - label
+        - description
+        - weights
