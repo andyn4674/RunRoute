@@ -410,6 +410,20 @@ components:
         - trail
         - mixed
 
+    RouteStop:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        name:
+          type: string
+          description: Optional name for the stop (e.g., landmark name).
+      required:
+        - lat
+        - lng
+
     RouteRequest:
       type: object
       properties:
@@ -455,6 +469,11 @@ components:
           enum: [loop, one_way]
           default: loop
           description: "'loop' generates a circular route returning to start. 'one_way' generates a point-to-point route where distance is one direction only."
+        stops:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteStop"
+          description: Optional waypoint stops the route must pass through (e.g., landmarks). Route will honor these stops and try to match target distance.
       required:
         - trainingGoal
         - distanceMinMiles

@@ -33,6 +33,7 @@ export * from "./routeRequestTimeOfDay";
 export * from "./routeResponse";
 export * from "./routeSegment";
 export * from "./routeSegmentTrafficLevel";
+export * from "./routeStop";
 export * from "./runListResponse";
 export * from "./runRecord";
 export * from "./scoreBreakdown";

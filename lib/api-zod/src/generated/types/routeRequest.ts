@@ -7,6 +7,7 @@
  */
 import type { RouteRequestRouteType } from "./routeRequestRouteType";
 import type { RouteRequestTimeOfDay } from "./routeRequestTimeOfDay";
+import type { RouteStop } from "./routeStop";
 import type { TrainingGoal } from "./trainingGoal";
 
 export interface RouteRequest {
@@ -43,4 +44,6 @@ export interface RouteRequest {
   preferTrails?: boolean;
   /** 'loop' generates a circular route returning to start. 'one_way' generates a point-to-point route where distance is one direction only. */
   routeType?: RouteRequestRouteType;
+  /** Optional waypoint stops the route must pass through (e.g., landmarks). Route will honor these stops and try to match target distance. */
+  stops?: RouteStop[];
 }

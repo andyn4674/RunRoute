@@ -1,5 +1,11 @@
 import { openai } from "@workspace/integrations-openai-ai-server";
 
+interface RouteStop {
+  lat: number;
+  lng: number;
+  name?: string;
+}
+
 interface RouteParams {
   trainingGoal: string;
   distanceMinMiles: number;
@@ -15,6 +21,7 @@ interface RouteParams {
   avoidTraffic?: boolean;
   preferTrails?: boolean;
   routeType?: "loop" | "one_way";
+  stops?: RouteStop[];
 }
 
 interface GoalWeightConfig {
@@ -837,55 +844,121 @@ export async function generateRoutes(params: RouteParams) {
   const effectiveWind = params.windSpeedMph ?? liveWeather.windSpeedMph;
   const effectiveUV = params.uvIndex ?? liveWeather.uvIndex;
 
+  const hasStops = params.stops && params.stops.length > 0;
+
   const routePromises = Array.from({ length: numRoutes }, async (_, r) => {
     const isOneWay = params.routeType === "one_way";
-    const numViaPoints = 6 + Math.floor(Math.random() * 4);
     const spreadPosition = r / (numRoutes - 1);
     const targetMilesForVariant = params.distanceMinMiles + (params.distanceMaxMiles - params.distanceMinMiles) * spreadPosition;
     const variantMaxKm = targetMilesForVariant * 1.60934;
-    const viaPoints = isOneWay
-      ? generateOneWayViaPoints(
-          params.startLat,
-          params.startLng,
-          targetMilesForVariant,
-          numViaPoints,
-          r
-        )
-      : generateLoopViaPoints(
-          params.startLat,
-          params.startLng,
-          targetMilesForVariant,
-          numViaPoints,
-          r
-        );
+
+    let viaPoints: Array<{ lat: number; lng: number }>;
+    let stopIndices: number[] = [];
+    let stopNames: (string | undefined)[] = [];
+
+    if (hasStops) {
+      const stops = params.stops!;
+      const start = { lat: params.startLat, lng: params.startLng };
+      let orderedStops = [...stops];
+      if (r === 1 && stops.length > 1) {
+        orderedStops = [...stops].reverse();
+      } else if (r === 2 && stops.length > 2) {
+        orderedStops = [...stops];
+        for (let i = orderedStops.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [orderedStops[i], orderedStops[j]] = [orderedStops[j], orderedStops[i]];
+        }
+      }
+
+      viaPoints = [start];
+      stopIndices = [];
+      stopNames = [];
+      for (const stop of orderedStops) {
+        viaPoints.push({ lat: stop.lat, lng: stop.lng });
+        stopIndices.push(viaPoints.length - 1);
+        stopNames.push(stop.name);
+      }
+      if (!isOneWay) {
+        viaPoints.push(start);
+      }
+    } else {
+      const numViaPoints = 6 + Math.floor(Math.random() * 4);
+      viaPoints = isOneWay
+        ? generateOneWayViaPoints(
+            params.startLat,
+            params.startLng,
+            targetMilesForVariant,
+            numViaPoints,
+            r
+          )
+        : generateLoopViaPoints(
+            params.startLat,
+            params.startLng,
+            targetMilesForVariant,
+            numViaPoints,
+            r
+          );
+    }
 
     let routePoints: Array<{ lat: number; lng: number }>;
     let usedRoadRouting = false;
+    let resolvedStopPointIndices: number[] = [];
 
     const osrmResult = await snapToRoads(viaPoints);
     if (osrmResult && osrmResult.points.length > 2) {
-      if (osrmResult.distanceKm > variantMaxKm) {
+      if (!hasStops && osrmResult.distanceKm > variantMaxKm) {
         routePoints = trimRouteToDistance(osrmResult.points, variantMaxKm, !isOneWay);
       } else {
         routePoints = osrmResult.points;
       }
       usedRoadRouting = true;
+
+      if (hasStops && stopIndices.length > 0) {
+        for (let si = 0; si < stopIndices.length; si++) {
+          const stopCoord = viaPoints[stopIndices[si]];
+          let bestIdx = 0;
+          let bestDist = Infinity;
+          for (let pi = 0; pi < routePoints.length; pi++) {
+            const d = haversineDistance(stopCoord.lat, stopCoord.lng, routePoints[pi].lat, routePoints[pi].lng);
+            if (d < bestDist) {
+              bestDist = d;
+              bestIdx = pi;
+            }
+          }
+          resolvedStopPointIndices.push(bestIdx);
+        }
+      }
     } else {
       routePoints = viaPoints;
+      if (hasStops) {
+        resolvedStopPointIndices = stopIndices;
+      }
     }
 
     const baseElevation = 100 + Math.random() * 500;
     const elevations = generateElevationProfile(routePoints.length, goal, baseElevation);
 
-    const waypointsWithElevation = routePoints.map((wp, i) => ({
-      ...wp,
-      elevation: elevations[i],
-      name: i === 0
-        ? (isOneWay ? "Start" : "Start/Finish")
-        : i === routePoints.length - 1
-          ? (isOneWay ? "Finish" : "Start/Finish")
-          : undefined,
-    }));
+    const waypointsWithElevation = routePoints.map((wp, i) => {
+      let name: string | undefined;
+      if (i === 0) {
+        name = isOneWay ? "Start" : "Start/Finish";
+      } else if (i === routePoints.length - 1) {
+        name = isOneWay ? "Finish" : "Start/Finish";
+      }
+
+      if (hasStops) {
+        const stopIdx = resolvedStopPointIndices.indexOf(i);
+        if (stopIdx !== -1) {
+          name = stopNames[stopIdx] || `Stop ${stopIdx + 1}`;
+        }
+      }
+
+      return {
+        ...wp,
+        elevation: elevations[i],
+        name,
+      };
+    });
 
     let totalDistanceKm = 0;
     for (let i = 0; i < routePoints.length - 1; i++) {

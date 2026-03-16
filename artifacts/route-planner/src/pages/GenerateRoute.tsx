@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapComponent } from "@/components/map/MapComponent";
@@ -6,10 +6,16 @@ import { ScoreRadar } from "@/components/charts/ScoreRadar";
 import { RouteChat } from "@/components/chat/RouteChat";
 import { useGenerateRoutes } from "@workspace/api-client-react";
 import type { RouteRequest } from "@workspace/api-client-react";
-import { Mountain, Flame, Heart, Zap, Clock, Dumbbell, Navigation, Loader2, Info, Map, Play, Watch, AlertTriangle, RotateCcw, ArrowRight } from "lucide-react";
+import { Mountain, Flame, Heart, Zap, Clock, Dumbbell, Navigation, Loader2, Info, Map, Play, Watch, AlertTriangle, RotateCcw, ArrowRight, MapPin, Plus, X, GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useRouteStore } from "@/context/RouteContext";
+
+interface Stop {
+  lat: number;
+  lng: number;
+  name?: string;
+}
 
 const GOALS = [
   { id: "endurance", label: "Endurance", icon: Clock },
@@ -25,6 +31,9 @@ export default function GenerateRoute() {
   const [, setLocation] = useLocation();
   const generateMutation = useGenerateRoutes();
   const { form, setForm, result, setResult, selectedRouteId, setSelectedRouteId, clearRoutes } = useRouteStore();
+  const [stops, setStops] = useState<Stop[]>([]);
+  const [addingStop, setAddingStop] = useState(false);
+  const [editingStopName, setEditingStopName] = useState<number | null>(null);
 
   const handleApplyParams = useCallback((params: Record<string, any>) => {
     const validGoals = ["mountain_hiking", "heat_tolerance", "recovery", "speed_workout", "endurance", "general_fitness"];
@@ -76,8 +85,13 @@ export default function GenerateRoute() {
       return;
     }
 
+    const requestData = {
+      ...form,
+      ...(stops.length > 0 ? { stops } : {}),
+    } as RouteRequest;
+
     generateMutation.mutate(
-      { data: form as RouteRequest },
+      { data: requestData },
       {
         onSuccess: (data) => {
           setResult(data);

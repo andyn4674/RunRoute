@@ -25,6 +25,13 @@ const startPinIcon = L.divIcon({
   iconAnchor: [8, 8]
 });
 
+const createStopIcon = (index: number) => L.divIcon({
+  className: 'stop-marker',
+  html: `<div style="width: 24px; height: 24px; border-radius: 50%; background: #FF4500; border: 3px solid white; box-shadow: 0 0 12px rgba(255,69,0,0.6); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px; font-family: sans-serif;">${index + 1}</div>`,
+  iconSize: [24, 24],
+  iconAnchor: [12, 12]
+});
+
 const userLocationIcon = L.divIcon({
   className: 'user-location-marker',
   html: `<div style="width: 18px; height: 18px; border-radius: 50%; background: #4285F4; border: 3px solid white; box-shadow: 0 0 12px rgba(66,133,244,0.6);"></div>`,
@@ -32,12 +39,21 @@ const userLocationIcon = L.divIcon({
   iconAnchor: [9, 9]
 });
 
+interface Stop {
+  lat: number;
+  lng: number;
+  name?: string;
+}
+
 interface MapComponentProps {
   startLocation: [number, number] | null;
   onLocationSelect?: (lat: number, lng: number) => void;
   routes?: GeneratedRoute[];
   selectedRouteId?: string;
   className?: string;
+  stops?: Stop[];
+  addingStop?: boolean;
+  onStopAdd?: (lat: number, lng: number) => void;
 }
 
 const ROUTE_COLORS = ['#FF4500', '#00E5FF', '#A020F0'];
@@ -63,7 +79,7 @@ function FlyToLocation({ position }: { position: [number, number] | null }) {
   return null;
 }
 
-export function MapComponent({ startLocation, onLocationSelect, routes = [], selectedRouteId, className = "h-[400px]" }: MapComponentProps) {
+export function MapComponent({ startLocation, onLocationSelect, routes = [], selectedRouteId, className = "h-[400px]", stops = [], addingStop, onStopAdd }: MapComponentProps) {
   const defaultCenter: [number, number] = [37.7749, -122.4194];
   const [locating, setLocating] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -126,7 +142,9 @@ export function MapComponent({ startLocation, onLocationSelect, routes = [], sel
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         
-        {onLocationSelect && <LocationMarker onSelect={onLocationSelect} />}
+        {(onLocationSelect || onStopAdd) && (
+          <LocationMarker onSelect={addingStop && onStopAdd ? onStopAdd : onLocationSelect} />
+        )}
         <FlyToLocation position={flyTarget} />
 
         {userLocation && (
@@ -140,6 +158,12 @@ export function MapComponent({ startLocation, onLocationSelect, routes = [], sel
             <Popup className="bg-card text-foreground font-sans">Start Location</Popup>
           </Marker>
         )}
+
+        {stops.map((stop, idx) => (
+          <Marker key={`stop-${idx}`} position={[stop.lat, stop.lng]} icon={createStopIcon(idx)}>
+            <Popup className="bg-card text-foreground font-sans">{stop.name || `Stop ${idx + 1}`}</Popup>
+          </Marker>
+        ))}
 
         {routes.map((route, idx) => {
           const isSelected = selectedRouteId === route.id;
@@ -196,6 +220,12 @@ export function MapComponent({ startLocation, onLocationSelect, routes = [], sel
             )}
             <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline">Locate Me</span>
           </button>
+        </div>
+      )}
+
+      {addingStop && (
+        <div className="absolute bottom-3 left-3 right-3 z-[1000] bg-primary/90 text-primary-foreground text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg backdrop-blur-sm text-center">
+          Tap the map to add a stop
         </div>
       )}
 

@@ -158,6 +158,21 @@ export const GenerateRoutesBody = zod.object({
     .describe(
       "'loop' generates a circular route returning to start. 'one_way' generates a point-to-point route where distance is one direction only.",
     ),
+  stops: zod
+    .array(
+      zod.object({
+        lat: zod.number(),
+        lng: zod.number(),
+        name: zod
+          .string()
+          .optional()
+          .describe("Optional name for the stop (e.g., landmark name)."),
+      }),
+    )
+    .optional()
+    .describe(
+      "Optional waypoint stops the route must pass through (e.g., landmarks). Route will honor these stops and try to match target distance.",
+    ),
 });
 
 export const generateRoutesResponseRoutesItemOverallScoreMin = 0;

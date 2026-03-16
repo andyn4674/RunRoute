@@ -29,6 +29,13 @@ export const SurfaceType = {
   mixed: "mixed",
 } as const;
 
+export interface RouteStop {
+  lat: number;
+  lng: number;
+  /** Optional name for the stop (e.g., landmark name). */
+  name?: string;
+}
+
 export type RouteRequestTimeOfDay =
   (typeof RouteRequestTimeOfDay)[keyof typeof RouteRequestTimeOfDay];
 
@@ -84,6 +91,8 @@ export interface RouteRequest {
   preferTrails?: boolean;
   /** 'loop' generates a circular route returning to start. 'one_way' generates a point-to-point route where distance is one direction only. */
   routeType?: RouteRequestRouteType;
+  /** Optional waypoint stops the route must pass through (e.g., landmarks). Route will honor these stops and try to match target distance. */
+  stops?: RouteStop[];
 }
 
 export interface ScoreBreakdown {
