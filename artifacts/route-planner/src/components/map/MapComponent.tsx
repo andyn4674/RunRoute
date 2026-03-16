@@ -56,7 +56,7 @@ interface MapComponentProps {
   onStopAdd?: (lat: number, lng: number) => void;
 }
 
-const ROUTE_COLORS = ['#FF4500', '#00E5FF', '#A020F0'];
+const ROUTE_COLORS = ['#FF4500', '#00E5FF', '#A020F0', '#FFD700', '#4CAF50'];
 
 function LocationMarker({ onSelect }: { onSelect?: (lat: number, lng: number) => void }) {
   useMapEvents({

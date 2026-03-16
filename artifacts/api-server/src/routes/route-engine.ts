@@ -857,7 +857,7 @@ function getWeatherSummary(
 
 export async function generateRoutes(params: RouteParams) {
   const goal = params.trainingGoal;
-  const numRoutes = 3;
+  const numRoutes = 5;
 
   if (params.distanceMaxMiles < params.distanceMinMiles) {
     const tmp = params.distanceMinMiles;
@@ -865,7 +865,7 @@ export async function generateRoutes(params: RouteParams) {
     params.distanceMaxMiles = tmp;
   }
   const midpointMiles = (params.distanceMinMiles + params.distanceMaxMiles) / 2;
-  const estAvgPace = goal === "speed_workout" ? 8 : goal === "recovery" ? 11 : 9.5;
+  const estAvgPace = goal === "speed_workout" ? 7 : goal === "recovery" ? 9.5 : goal === "mountain_hiking" ? 9 : 8;
   const estRunDuration = Math.round(midpointMiles * estAvgPace);
 
   const [forecast, advisories] = await Promise.all([
@@ -1059,7 +1059,11 @@ export async function generateRoutes(params: RouteParams) {
       effectiveTemp
     );
 
-    const avgPace = goal === "speed_workout" ? 7 + Math.random() * 2 : goal === "recovery" ? 10 + Math.random() * 2 : 8.5 + Math.random() * 2;
+    const avgPace = goal === "speed_workout" ? 6.5 + Math.random() * 1.5
+      : goal === "recovery" ? 9 + Math.random() * 1.5
+      : goal === "mountain_hiking" ? 8.5 + Math.random() * 1.5
+      : goal === "heat_tolerance" ? 8 + Math.random() * 1.5
+      : 7.5 + Math.random() * 1.5;
     const estimatedDuration = Math.round(displayDistance * avgPace);
 
     const runWindow = getWeatherForRunWindow(forecast, estimatedDuration);

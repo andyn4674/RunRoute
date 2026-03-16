@@ -313,7 +313,7 @@ export default function GenerateRoute() {
 
               {result.routes.map((route, idx) => {
                 const isSelected = selectedRouteId === route.id;
-                const colors = ['hsl(15, 100%, 55%)', 'hsl(180, 100%, 40%)', 'hsl(280, 100%, 60%)'];
+                const colors = ['hsl(15, 100%, 55%)', 'hsl(180, 100%, 40%)', 'hsl(280, 100%, 60%)', 'hsl(45, 100%, 50%)', 'hsl(140, 70%, 45%)'];
                 const color = colors[idx % colors.length];
 
                 return (
@@ -338,7 +338,7 @@ export default function GenerateRoute() {
                       <div className="flex justify-between items-start mb-4">
                         <div>
                           <div className="flex items-center gap-3 mb-2">
-                            <span className="font-display text-2xl" style={{ color }}>OPTION 0{idx + 1}</span>
+                            <span className="font-display text-2xl" style={{ color }}>OPTION {idx + 1}</span>
                             <span className="px-3 py-1 bg-muted rounded-full text-xs font-bold uppercase tracking-widest text-foreground">
                               {route.overallScore} SCORE
                             </span>
