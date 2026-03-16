@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapComponent } from "@/components/map/MapComponent";
 import { ScoreRadar } from "@/components/charts/ScoreRadar";
+import { RouteChat } from "@/components/chat/RouteChat";
 import { useGenerateRoutes } from "@workspace/api-client-react";
 import type { RouteRequest, RouteResponse, GeneratedRoute } from "@workspace/api-client-react";
 import { Mountain, Flame, Heart, Zap, Clock, Dumbbell, Navigation, Loader2, Info, Map } from "lucide-react";
@@ -34,6 +35,39 @@ export default function GenerateRoute() {
 
   const [result, setResult] = useState<RouteResponse | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+
+  const handleApplyParams = useCallback((params: Record<string, any>) => {
+    const validGoals = ["mountain_hiking", "heat_tolerance", "recovery", "speed_workout", "endurance", "general_fitness"];
+    const validTimes = ["morning", "afternoon", "evening", "night"];
+
+    setForm(prev => {
+      const updated = { ...prev };
+      if (params.trainingGoal && validGoals.includes(params.trainingGoal)) {
+        updated.trainingGoal = params.trainingGoal as any;
+      }
+      if (typeof params.distanceMiles === "number" && params.distanceMiles >= 0.5 && params.distanceMiles <= 30) {
+        updated.distanceMiles = params.distanceMiles;
+      }
+      if (params.timeOfDay && validTimes.includes(params.timeOfDay)) {
+        updated.timeOfDay = params.timeOfDay as any;
+      }
+      if (typeof params.preferShade === "boolean") updated.preferShade = params.preferShade;
+      if (typeof params.avoidTraffic === "boolean") updated.avoidTraffic = params.avoidTraffic;
+      if (typeof params.preferTrails === "boolean") updated.preferTrails = params.preferTrails;
+      if (typeof params.temperatureF === "number") updated.temperatureF = params.temperatureF as any;
+      if (typeof params.humidity === "number" && params.humidity >= 0 && params.humidity <= 100) {
+        updated.humidity = params.humidity as any;
+      }
+      if (typeof params.windSpeedMph === "number" && params.windSpeedMph >= 0) {
+        updated.windSpeedMph = params.windSpeedMph as any;
+      }
+      if (typeof params.uvIndex === "number" && params.uvIndex >= 0 && params.uvIndex <= 11) {
+        updated.uvIndex = params.uvIndex as any;
+      }
+      return updated;
+    });
+    toast({ title: "Settings applied!", description: "Route parameters updated from AI recommendations." });
+  }, [toast]);
 
   const handleGenerate = () => {
     if (!form.trainingGoal || !form.distanceMiles || !form.startLat || !form.startLng) {
@@ -279,6 +313,8 @@ export default function GenerateRoute() {
           )}
         </AnimatePresence>
       </div>
+
+      <RouteChat onApplyParams={handleApplyParams} />
     </div>
   );
 }

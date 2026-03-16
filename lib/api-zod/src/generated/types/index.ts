@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./createOpenaiConversationBody";
 export * from "./generatedRoute";
 export * from "./generatedRouteSurfaceBreakdown";
 export * from "./goalWeights";
@@ -13,6 +14,10 @@ export * from "./goalWeightsWeights";
 export * from "./healthStatus";
 export * from "./listRunsParams";
 export * from "./logRunRequest";
+export * from "./openaiConversation";
+export * from "./openaiConversationWithMessages";
+export * from "./openaiError";
+export * from "./openaiMessage";
 export * from "./routeRequest";
 export * from "./routeRequestTimeOfDay";
 export * from "./routeResponse";
@@ -23,6 +28,7 @@ export * from "./runRecord";
 export * from "./scoreBreakdown";
 export * from "./scoringFactorsResponse";
 export * from "./scoringFactorsResponseGoals";
+export * from "./sendOpenaiMessageBody";
 export * from "./surfaceType";
 export * from "./trainingGoal";
 export * from "./userProfile";

@@ -45,6 +45,7 @@ A web application that generates personalized running routes based on training g
 
 ### Features
 - **Route Generation** — Select training goal (mountain hiking, heat tolerance, recovery, speed, endurance, general), distance, time of day, and start location on interactive map
+- **AI Route Coach** — Chat with an AI assistant to describe your ideal run in natural language; AI extracts route parameters and applies them to the form
 - **Smart Scoring** — Routes scored across 6 dimensions: terrain match, safety, environmental fit, training effectiveness, shade, traffic
 - **Interactive Map** — Leaflet/OpenStreetMap with colored route polylines and waypoint markers
 - **Score Visualization** — Radar charts for route score breakdown, elevation profile charts
@@ -60,10 +61,27 @@ A web application that generates personalized running routes based on training g
 - `PUT /api/profiles` — Update user preferences
 - `GET /api/runs` — List past runs
 - `POST /api/runs` — Log a completed run
+- `GET /api/openai/conversations` — List chat conversations
+- `POST /api/openai/conversations` — Create a new chat conversation
+- `GET /api/openai/conversations/:id` — Get conversation with messages
+- `DELETE /api/openai/conversations/:id` — Delete a conversation
+- `GET /api/openai/conversations/:id/messages` — List messages
+- `POST /api/openai/conversations/:id/messages` — Send message (SSE streaming response)
 
 ### Database Tables
 - `profiles` — User preferences (heat/elevation tolerance, preferred goals, surfaces, stats)
 - `runs` — Run history (distance, duration, effort, elevation, temperature)
+- `conversations` — AI chat conversations
+- `messages` — Chat messages (user and assistant roles)
+
+### AI Integration
+- Uses Replit AI Integrations for OpenAI (gpt-5.2 model) — no API key needed
+- Server-side: `@workspace/integrations-openai-ai-server` package in `lib/integrations-openai-ai-server/`
+- Chat routes: `artifacts/api-server/src/routes/openai/index.ts`
+- Frontend chat component: `artifacts/route-planner/src/components/chat/RouteChat.tsx`
+- AI extracts route parameters using `<route_params>` XML tags in responses
+- SSE streaming for real-time response display
+- Conversation history limited to last 20 messages for context window management
 
 ### Route Generation Engine
 Located in `artifacts/api-server/src/routes/route-engine.ts`. Uses:
