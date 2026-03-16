@@ -1,14 +1,93 @@
+import { useState, useEffect } from "react";
 import { useParams, Link } from "wouter";
 import { useGetRoute } from "@workspace/api-client-react";
 import { ElevationProfile } from "@/components/charts/ElevationProfile";
 import { MapComponent } from "@/components/map/MapComponent";
-import { ArrowLeft, AlertTriangle, CheckCircle2, Navigation, Mountain, Timer } from "lucide-react";
+import { ArrowLeft, AlertTriangle, CheckCircle2, Mountain, Sparkles, Loader2 } from "lucide-react";
+
+function useRouteAnalysis(routeId: string | undefined) {
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!routeId) return;
+
+    setLoading(true);
+    setError(null);
+
+    const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+    fetch(`${baseUrl}/api/routes/${routeId}/analysis`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load analysis");
+        return res.json();
+      })
+      .then((data) => {
+        setAnalysis(data.analysis);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, [routeId]);
+
+  return { analysis, loading, error };
+}
+
+function AnalysisContent({ text }: { text: string }) {
+  const lines = text.split("\n").filter((l) => l.trim());
+
+  return (
+    <div className="space-y-2">
+      {lines.map((line, i) => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
+          const heading = trimmed.replace(/\*\*/g, "");
+          const isProHeading = heading.toLowerCase().includes("pro");
+          const isConHeading = heading.toLowerCase().includes("con");
+          const isBestFor = heading.toLowerCase().includes("best for");
+          return (
+            <h4
+              key={i}
+              className={`font-bold text-sm uppercase tracking-wider mt-3 first:mt-0 ${
+                isProHeading ? "text-green-400" : isConHeading ? "text-yellow-400" : isBestFor ? "text-secondary" : "text-foreground"
+              }`}
+            >
+              {heading}
+            </h4>
+          );
+        }
+        if (trimmed.startsWith("- ")) {
+          return (
+            <p key={i} className="text-sm text-foreground/80 pl-3 flex items-start gap-2">
+              <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-muted-foreground shrink-0" />
+              {trimmed.slice(2)}
+            </p>
+          );
+        }
+        if (trimmed.startsWith("**Best For:**")) {
+          return (
+            <p key={i} className="text-sm text-secondary font-semibold mt-3">
+              {trimmed.replace("**Best For:**", "Best For:").trim()}
+            </p>
+          );
+        }
+        return (
+          <p key={i} className="text-sm text-foreground/80">
+            {trimmed}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function RouteDetail() {
   const { id } = useParams<{ id: string }>();
-  // If no ID or if the ID is just the route param without a real backend generated state,
-  // we would fetch it. Since the API requires it to exist on the backend, we use the hook.
   const { data: route, isLoading, error } = useGetRoute(id || "");
+  const { analysis, loading: analysisLoading, error: analysisError } = useRouteAnalysis(id);
 
   if (isLoading) {
     return (
@@ -28,7 +107,7 @@ export default function RouteDetail() {
   }
 
   return (
-    <div className="pb-20 max-w-5xl mx-auto space-y-8">
+    <div className="pb-20 max-w-5xl mx-auto space-y-6 sm:space-y-8">
       <Link href="/generate" className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors font-bold uppercase tracking-wider text-sm">
         <ArrowLeft className="w-4 h-4" /> Back to options
       </Link>
@@ -54,9 +133,9 @@ export default function RouteDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <div className="h-[400px] rounded-2xl overflow-hidden border border-border shadow-xl">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+        <div className="lg:col-span-2 space-y-6 sm:space-y-8">
+          <div className="h-[300px] sm:h-[400px] rounded-2xl overflow-hidden border border-border shadow-xl">
             <MapComponent 
               startLocation={null} 
               routes={[route]} 
@@ -65,7 +144,7 @@ export default function RouteDetail() {
             />
           </div>
 
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-lg">
+          <div className="bg-card border border-border rounded-2xl p-5 sm:p-6 shadow-lg">
             <h3 className="text-xl font-display mb-6 flex items-center gap-2">
               <Mountain className="text-primary" /> Elevation Profile
             </h3>
@@ -75,17 +154,33 @@ export default function RouteDetail() {
             </div>
             <ElevationProfile waypoints={route.waypoints} color="hsl(180, 100%, 40%)" />
           </div>
+
+          <div className="bg-gradient-to-br from-violet-500/10 to-card border border-violet-500/20 rounded-2xl p-5 sm:p-6 shadow-lg">
+            <h3 className="text-lg sm:text-xl font-display mb-4 flex items-center gap-2 text-violet-400">
+              <Sparkles className="w-5 h-5" /> AI Route Analysis
+            </h3>
+            {analysisLoading && (
+              <div className="flex items-center gap-3 text-muted-foreground py-4">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Analyzing route details...</span>
+              </div>
+            )}
+            {analysisError && (
+              <p className="text-sm text-muted-foreground">Unable to generate analysis. Try refreshing the page.</p>
+            )}
+            {analysis && <AnalysisContent text={analysis} />}
+          </div>
         </div>
 
-        <div className="space-y-8">
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-lg">
+        <div className="space-y-6 sm:space-y-8">
+          <div className="bg-card border border-border rounded-2xl p-5 sm:p-6 shadow-lg">
             <h3 className="text-xl font-display mb-4">Route Info</h3>
             <p className="text-muted-foreground text-sm leading-relaxed mb-6">{route.description}</p>
             
             <div className="space-y-4">
               <div className="flex justify-between items-center py-2 border-b border-border/50">
                 <span className="text-sm text-muted-foreground font-bold uppercase tracking-wider">Surfaces</span>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap justify-end">
                   {Object.entries(route.surfaceBreakdown).map(([surface, pct]) => (
                     <span key={surface} className="text-xs bg-muted px-2 py-1 rounded">
                       {surface} ({pct}%)
@@ -97,7 +192,7 @@ export default function RouteDetail() {
           </div>
 
           {route.warnings.length > 0 && (
-            <div className="bg-destructive/10 border border-destructive/30 rounded-2xl p-6">
+            <div className="bg-destructive/10 border border-destructive/30 rounded-2xl p-5 sm:p-6">
               <h3 className="text-lg font-bold text-destructive mb-3 flex items-center gap-2 uppercase tracking-wider">
                 <AlertTriangle className="w-5 h-5" /> Advisories
               </h3>
@@ -111,7 +206,7 @@ export default function RouteDetail() {
             </div>
           )}
 
-          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6">
+          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 sm:p-6">
             <h3 className="text-lg font-bold text-primary mb-3 flex items-center gap-2 uppercase tracking-wider">
               <CheckCircle2 className="w-5 h-5" /> Highlights
             </h3>

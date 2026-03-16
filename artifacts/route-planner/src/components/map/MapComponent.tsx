@@ -11,11 +11,18 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-const createDotIcon = (color: string) => L.divIcon({
+const createDotIcon = (color: string, size = 12) => L.divIcon({
   className: 'custom-dot-marker',
-  html: `<div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px ${color}80;"></div>`,
-  iconSize: [12, 12],
-  iconAnchor: [6, 6]
+  html: `<div style="background-color: ${color}; width: ${size}px; height: ${size}px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px ${color}80;"></div>`,
+  iconSize: [size, size],
+  iconAnchor: [size / 2, size / 2]
+});
+
+const startPinIcon = L.divIcon({
+  className: 'start-pin-marker',
+  html: `<div style="width: 16px; height: 16px; border-radius: 50%; background: #22C55E; border: 3px solid white; box-shadow: 0 0 12px rgba(34,197,94,0.6);"></div>`,
+  iconSize: [16, 16],
+  iconAnchor: [8, 8]
 });
 
 const userLocationIcon = L.divIcon({
@@ -129,7 +136,7 @@ export function MapComponent({ startLocation, onLocationSelect, routes = [], sel
         )}
 
         {startLocation && (
-          <Marker position={startLocation} icon={createDotIcon('#FF4500')}>
+          <Marker position={startLocation} icon={startPinIcon}>
             <Popup className="bg-card text-foreground font-sans">Start Location</Popup>
           </Marker>
         )}
@@ -146,17 +153,24 @@ export function MapComponent({ startLocation, onLocationSelect, routes = [], sel
                 positions={positions}
                 pathOptions={{ 
                   color: color, 
-                  weight: isSelected ? 6 : 4,
-                  opacity: isFaded ? 0.3 : 0.9,
+                  weight: isSelected ? 5 : 3,
+                  opacity: isFaded ? 0.25 : 0.85,
                   lineCap: 'round',
                   lineJoin: 'round'
                 }}
               />
               {isSelected && route.waypoints.map((wp, wIdx) => {
-                if (wIdx === 0 || wIdx === route.waypoints.length - 1 || wp.name) {
+                if (wIdx === 0 || wIdx === route.waypoints.length - 1) {
+                  return (
+                    <Marker key={wIdx} position={[wp.lat, wp.lng]} icon={createDotIcon(color, 14)}>
+                      <Popup>{wIdx === 0 ? "Start / Finish" : "End"}</Popup>
+                    </Marker>
+                  );
+                }
+                if (wp.name) {
                   return (
                     <Marker key={wIdx} position={[wp.lat, wp.lng]} icon={createDotIcon(color)}>
-                      {wp.name && <Popup>{wp.name}</Popup>}
+                      <Popup>{wp.name}</Popup>
                     </Marker>
                   );
                 }

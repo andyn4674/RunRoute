@@ -184,7 +184,7 @@ async function snapToRoads(
   waypoints: Array<{ lat: number; lng: number }>,
 ): Promise<Array<{ lat: number; lng: number }> | null> {
   const coords = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(";");
-  const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=polyline&steps=false&continue_straight=true`;
+  const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=polyline&steps=false`;
 
   try {
     const response = await fetch(url, {
@@ -447,7 +447,7 @@ export async function generateRoutes(params: RouteParams) {
 
     const snappedPoints = await snapToRoads(viaPoints);
     if (snappedPoints && snappedPoints.length > 2) {
-      routePoints = downsamplePoints(snappedPoints, 60 + Math.floor(Math.random() * 40));
+      routePoints = snappedPoints;
       usedRoadRouting = true;
     } else {
       routePoints = viaPoints;
